@@ -8,8 +8,8 @@
  */
 export const login = async (email, password) => {
   try {
-    // Use direct URL to ensure it works regardless of environment variables
-      const apiUrl = `${import.meta.env.VITE_BASE_URL}/api/v1/auth/login`;
+    // Use proxied URL to avoid CORS issues
+    const apiUrl = '/api/v1/auth/login';
     
     console.log('Attempting to login with:', { email, apiUrl });
     

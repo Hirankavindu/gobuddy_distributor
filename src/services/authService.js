@@ -9,7 +9,7 @@
 export const login = async (email, password) => {
   try {
     // Use direct URL to ensure it works regardless of environment variables
-      const apiUrl = 'http://192.168.8.133:8080/api/v1/auth/login';
+      const apiUrl = `${import.meta.env.VITE_BASE_URL}/api/v1/auth/login`;
     
     console.log('Attempting to login with:', { email, apiUrl });
     

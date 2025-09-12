@@ -1,0 +1,29 @@
+/* Animation styles for tab switching */
+.tab-content {
+  position: relative;
+  overflow: hidden;
+}
+
+.tab-pane {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.tab-slide-left {
+  transform: translateX(-100%);
+  opacity: 0;
+  position: absolute;
+  width: 100%;
+}
+
+.tab-slide-right {
+  transform: translateX(100%);
+  opacity: 0;
+  position: absolute;
+  width: 100%;
+}
+
+.tab-active {
+  transform: translateX(0);
+  opacity: 1;
+  position: relative;
+}

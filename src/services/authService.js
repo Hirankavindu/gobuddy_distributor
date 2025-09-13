@@ -84,3 +84,99 @@ export const getUserInfo = () => {
     role: localStorage.getItem('role')
   };
 };
+
+/**
+ * Registers a new distributor
+ * @param {object} distributorData - Distributor registration data
+ * @returns {Promise} - Response object with registration result
+ */
+export const registerDistributor = async (distributorData) => {
+  try {
+    // Use proxied URL to avoid CORS issues
+    const apiUrl = '/api/v1/auth/register/distributor';
+    
+    console.log('Attempting to register distributor with:', { email: distributorData.email });
+    
+    // Get the access token from local storage
+    const accessToken = localStorage.getItem('accessToken');
+    
+    // Log the token being used (first 10 chars for security)
+    console.log('Using token (first 10 chars):', accessToken ? accessToken.substring(0, 10) + '...' : 'No token');
+    
+    // Log the full payload structure (without sensitive data) for debugging
+    console.log('Request payload structure:', {
+      ...distributorData,
+      password: '[REDACTED]',
+      profileImage: distributorData.profileImage ? '[BASE64_DATA]' : null,
+      distributorImageUrl: distributorData.distributorImageUrl ? '[BASE64_DATA]' : null
+    });
+    
+    // Handle specific fields according to backend requirements
+    
+    // Convert deliveryDates to an array if it's a string
+    if (typeof distributorData.deliveryDates === 'string' && distributorData.deliveryDates) {
+      distributorData.deliveryDates = distributorData.deliveryDates.split(',').map(day => day.trim());
+    } else if (!distributorData.deliveryDates) {
+      distributorData.deliveryDates = [];
+    }
+    
+    // Keep socialMediaLinks as a string
+    if (Array.isArray(distributorData.socialMediaLinks)) {
+      distributorData.socialMediaLinks = distributorData.socialMediaLinks.join(',');
+    }
+    
+    // Final check of data format
+    const finalPayload = { ...distributorData };
+    
+    // Ensure specific formats based on backend requirements
+    finalPayload.socialMediaLinks = String(finalPayload.socialMediaLinks || '');
+    // deliveryDates must be an array for the backend
+    if (!Array.isArray(finalPayload.deliveryDates)) {
+      finalPayload.deliveryDates = finalPayload.deliveryDates ? 
+        finalPayload.deliveryDates.split(',').map(day => day.trim()) : [];
+    }
+    finalPayload.workingDays = String(finalPayload.workingDays || '');
+    finalPayload.openingTimes = String(finalPayload.openingTimes || '');
+    
+    // Log the final payload JSON
+    console.log('Final JSON payload:', JSON.stringify(finalPayload));
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}` // Admin token for authorization
+      },
+      body: JSON.stringify(finalPayload)
+    });
+
+    console.log('Registration response status:', response.status);
+    
+    if (!response.ok) {
+      let errorMessage = `Registration failed with status: ${response.status}`;
+      
+      try {
+        const errorData = await response.json();
+        console.error('Registration error response:', errorData);
+        errorMessage = errorData.message || errorMessage;
+      } catch (jsonError) {
+        console.error('Could not parse error response as JSON:', jsonError);
+      }
+      
+      // Special handling for 403 errors (authorization issues)
+      if (response.status === 403) {
+        errorMessage = 'Authorization failed. Please ensure you have admin privileges and are properly logged in.';
+      }
+      
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    console.log('Registration successful:', data);
+    
+    return data;
+  } catch (error) {
+    console.error("Registration error:", error);
+    throw error;
+  }
+};

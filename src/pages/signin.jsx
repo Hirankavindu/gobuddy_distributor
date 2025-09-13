@@ -28,29 +28,46 @@ function SignIn() {
     try {
       // Handle admin login
       if (activeTab === 'admin') {
-        if (email === 'admin@gmail.com' && password === 'Admin123') {
-          // Simulate admin login
-          const adminData = {
-            accessToken: 'admin-token',
-            refreshToken: 'admin-refresh',
-            userId: 'admin-id',
-            email: 'admin@gmail.com',
-            role: 'ADMIN'
-          };
+        try {
+          // Use the same login API for admin, but check role on response
+          const response = await login(email, password);
           
-          // Save admin tokens and redirect
-          localStorage.setItem('accessToken', adminData.accessToken);
-          localStorage.setItem('refreshToken', adminData.refreshToken);
-          localStorage.setItem('userId', adminData.userId);
-          localStorage.setItem('email', adminData.email);
-          localStorage.setItem('role', adminData.role);
-          
-          // Update auth context
-          handleLogin(adminData);
-          
-          navigate('/admin');
-        } else {
-          setError('Invalid admin credentials. Please try again.');
+          // Verify that the user is an admin
+          if (response.role === 'ADMIN') {
+            // Update auth context
+            handleLogin(response);
+            navigate('/admin');
+          } else {
+            setError('This account does not have admin privileges.');
+          }
+        } catch (error) {
+          console.error('Admin login error:', error);
+          if (email === 'admin@gmail.com' && password === 'Admin123') {
+            // Fallback for demo purposes if backend is not available
+            console.warn('Using fallback admin login (demo mode)');
+            
+            const adminData = {
+              accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbkBnbWFpbC5jb20iLCJyb2xlIjoiQURNSU4iLCJpYXQiOjE2OTQ2MTcwMDAsImV4cCI6MTY5NDcwMzQwMH0.8HHRi6DVTTxcEe9foUkBJZh0bCZZ9dFI2gDgT3yyoiQ',
+              refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbkBnbWFpbC5jb20iLCJpYXQiOjE2OTQ2MTcwMDAsImV4cCI6MTY5NTIyMTgwMH0.hzH0L35Ny0QsTk3Bs7tDQJ1gPwtXBRRJKWX7O9KA1Qc',
+              userId: 'admin-123456',
+              email: 'admin@gmail.com',
+              role: 'ADMIN'
+            };
+            
+            // Save admin tokens and redirect
+            localStorage.setItem('accessToken', adminData.accessToken);
+            localStorage.setItem('refreshToken', adminData.refreshToken);
+            localStorage.setItem('userId', adminData.userId);
+            localStorage.setItem('email', adminData.email);
+            localStorage.setItem('role', adminData.role);
+            
+            // Update auth context
+            handleLogin(adminData);
+            
+            navigate('/admin');
+          } else {
+            setError('Invalid admin credentials. Please try again.');
+          }
         }
         setLoading(false);
         return;

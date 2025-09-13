@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../providers/useAuth';
 import { registerDistributor, fetchDistributors } from '../../services/authService';
 import Swal from 'sweetalert2';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../services/firebase';
 
 function AdminDashboard() {
   const { user, handleLogout } = useAuth();
@@ -46,8 +48,10 @@ function AdminDashboard() {
   };
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
-  const [profileImage, setProfileImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [imageUrl, setImageUrl] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [validationErrors, setValidationErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -90,19 +94,120 @@ function AdminDashboard() {
     setMessage(null);
   };
   
-  // Handle image selection and preview
-  const handleImageChange = (e) => {
+  // Handle image selection and upload to Firebase
+  const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      setProfileImage(file);
-      
-      // Create image preview
+      // Check file size limit (10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        Swal.fire({
+          icon: 'error',
+          title: 'File Too Large',
+          text: 'Please select an image smaller than 10MB.',
+        });
+        return;
+      }
+
+      setUploadingImage(true);
+      setUploadProgress(0);
+
+      // Create preview immediately
       const reader = new FileReader();
-      reader.onload = () => {
-        setImagePreview(reader.result);
+      reader.onload = (event) => {
+        setImagePreview(event.target.result);
       };
       reader.readAsDataURL(file);
+
+      try {
+        // Check file size - only compress if > 1MB
+        let fileToUpload = file;
+        if (file.size > 1024 * 1024) { // 1MB
+          fileToUpload = await compressImage(file);
+        }
+
+        // Create a unique filename
+        const timestamp = Date.now();
+        const filename = `distributors/${timestamp}_${file.name}`;
+        const storageRef = ref(storage, filename);
+
+        // Upload the file with progress tracking
+        const uploadTask = uploadBytesResumable(storageRef, fileToUpload);
+
+        // Monitor upload progress
+        uploadTask.on('state_changed',
+          (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setUploadProgress(progress);
+          },
+          (error) => {
+            console.error('Upload error:', error);
+            throw error;
+          }
+        );
+
+        // Wait for upload to complete
+        await uploadTask;
+
+        // Get the download URL
+        const downloadURL = await getDownloadURL(storageRef);
+        setImageUrl(downloadURL);
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Upload Failed',
+          text: 'Failed to upload image. Please try again.',
+        });
+      } finally {
+        setUploadingImage(false);
+        setUploadProgress(0);
+      }
     }
+  };
+
+  // Compress image function - optimized for speed
+  const compressImage = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+
+          // Faster compression settings
+          const maxSize = 400; // Reduced from 500
+          let { width, height } = img;
+
+          // Maintain aspect ratio
+          if (width > height) {
+            if (width > maxSize) {
+              height = (height * maxSize) / width;
+              width = maxSize;
+            }
+          } else {
+            if (height > maxSize) {
+              width = (width * maxSize) / height;
+              height = maxSize;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          // Use better image smoothing for quality
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'medium';
+
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Convert to blob with lower quality for faster processing
+          canvas.toBlob(resolve, 'image/jpeg', 0.5); // Reduced from 0.6
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
   };
   
   // Handle form input changes
@@ -251,11 +356,10 @@ function AdminDashboard() {
     setLoading(true);
     
     try {
-      // Convert image to Base64 if available
-      if (profileImage) {
-        const base64Image = await convertToBase64(profileImage);
-        formData.profileImage = base64Image;
-        formData.distributorImageUrl = base64Image;
+      // Use Firebase URL if available
+      if (imageUrl) {
+        formData.profileImage = imageUrl;
+        formData.distributorImageUrl = imageUrl;
       }
       
       // Make sure opening times are properly formatted
@@ -345,8 +449,9 @@ function AdminDashboard() {
           socialMediaLinks: '',
           planId: 'default'
         });
-        setProfileImage(null);
         setImagePreview(null);
+        setImageUrl('');
+        setUploadProgress(0);
       }
     } catch (error) {
       console.error('Registration error:', error);
@@ -362,16 +467,7 @@ function AdminDashboard() {
       setLoading(false);
     }
   };
-  
-  // Convert file to Base64
-  const convertToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = (error) => reject(error);
-    });
-  };
+
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex">
@@ -749,9 +845,31 @@ function AdminDashboard() {
                       name="profileImage"
                       accept="image/*"
                       onChange={handleImageChange}
+                      disabled={uploadingImage}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                     />
-                    {imagePreview && (
+                    {uploadingImage && (
+                      <div className="mt-2">
+                        <div className="flex items-center">
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span className="text-sm text-blue-600">
+                            {uploadProgress > 0 ? `Uploading... ${Math.round(uploadProgress)}%` : 'Processing image...'}
+                          </span>
+                        </div>
+                        {uploadProgress > 0 && (
+                          <div className="mt-2 bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${uploadProgress}%` }}
+                            ></div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {imagePreview && !uploadingImage && (
                       <div className="mt-2">
                         <img src={imagePreview} alt="Profile Preview" className="w-32 h-32 object-cover rounded-md border border-gray-300" />
                       </div>
@@ -1132,7 +1250,7 @@ function AdminDashboard() {
                 <div className="flex justify-end pt-4">
                   <button 
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || uploadingImage || (imagePreview && !imageUrl)}
                     className="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
                   >
                     {loading ? 'Registering...' : 'Register Distributor'}

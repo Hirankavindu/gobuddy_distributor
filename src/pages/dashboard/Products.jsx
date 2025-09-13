@@ -1,6 +1,8 @@
 import { useState, useContext } from 'react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../services/firebase';
 import AuthContext from '../../providers/AuthContext';
 
 // Sample products data
@@ -31,21 +33,97 @@ export default function Products() {
   const [price, setPrice] = useState(0);
   const [weight, setWeight] = useState(0);
   const [imagePreview, setImagePreview] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // Handle image file selection
-  const handleImageChange = (e) => {
+  // Handle image file selection and upload to Firebase
+  const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Check file size limit (10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        Swal.fire({
+          icon: 'error',
+          title: 'File Too Large',
+          text: 'Please select an image smaller than 10MB.',
+        });
+        return;
+      }
+
+      setUploadingImage(true);
+      setUploadProgress(0);
+
+      // Create preview immediately
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setImagePreview(event.target.result);
+      };
+      reader.readAsDataURL(file);
+
+      try {
+        // Check file size - only compress if > 1MB
+        let fileToUpload = file;
+        if (file.size > 1024 * 1024) { // 1MB
+          fileToUpload = await compressImage(file);
+        }
+
+        // Create a unique filename
+        const timestamp = Date.now();
+        const filename = `products/${timestamp}_${file.name}`;
+        const storageRef = ref(storage, filename);
+
+        // Upload the file with progress tracking
+        const uploadTask = uploadBytesResumable(storageRef, fileToUpload);
+
+        // Monitor upload progress
+        uploadTask.on('state_changed',
+          (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setUploadProgress(progress);
+          },
+          (error) => {
+            console.error('Upload error:', error);
+            throw error;
+          }
+        );
+
+        // Wait for upload to complete
+        await uploadTask;
+
+        // Get the download URL
+        const downloadURL = await getDownloadURL(storageRef);
+        setImageUrl(downloadURL);
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Upload Failed',
+          text: 'Failed to upload image. Please try again.',
+        });
+      } finally {
+        setUploadingImage(false);
+        setUploadProgress(0);
+      }
+    }
+  };
+
+  // Compress image function - optimized for speed
+  const compressImage = (file) => {
+    return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
-          // Resize to max 800px width/height
-          const maxSize = 800;
+
+          // Faster compression settings
+          const maxSize = 400; // Reduced from 500
           let { width, height } = img;
+
+          // Maintain aspect ratio
           if (width > height) {
             if (width > maxSize) {
               height = (height * maxSize) / width;
@@ -57,16 +135,23 @@ export default function Products() {
               height = maxSize;
             }
           }
+
           canvas.width = width;
           canvas.height = height;
+
+          // Use better image smoothing for quality
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'medium';
+
           ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-          setImagePreview(compressedDataUrl);
+
+          // Convert to blob with lower quality for faster processing
+          canvas.toBlob(resolve, 'image/jpeg', 0.5); // Reduced from 0.6
         };
         img.src = event.target.result;
       };
       reader.readAsDataURL(file);
-    }
+    });
   };
 
   // Handle form submission
@@ -84,7 +169,7 @@ export default function Products() {
         stockQuantity: Number(stockQuantity),
         price: Number(price),
         weight: Number(weight),
-        image: imagePreview.split(',')[1], // Remove data:image/...;base64, prefix
+        image: imageUrl,
         distributorId: user.userId
       };
       await axios.post('/api/v1/products', formData, {
@@ -106,6 +191,8 @@ export default function Products() {
       setPrice(0);
       setWeight(0);
       setImagePreview('');
+      setImageUrl('');
+      setUploadProgress(0);
       setShowAddModal(false);
     } catch (error) {
       console.error('Error adding product:', error);
@@ -512,9 +599,31 @@ export default function Products() {
                     accept="image/*"
                     onChange={handleImageChange}
                     required
+                    disabled={uploadingImage}
                     className="mt-1 px-3 py-2 border border-gray-300 rounded-md w-full"
                   />
-                  {imagePreview && (
+                  {uploadingImage && (
+                    <div className="mt-2">
+                      <div className="flex items-center">
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span className="text-sm text-blue-600">
+                          {uploadProgress > 0 ? `Uploading... ${Math.round(uploadProgress)}%` : 'Processing image...'}
+                        </span>
+                      </div>
+                      {uploadProgress > 0 && (
+                        <div className="mt-2 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${uploadProgress}%` }}
+                          ></div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {imagePreview && !uploadingImage && (
                     <img src={imagePreview} alt="Preview" className="mt-2 w-32 h-32 object-cover rounded-md" />
                   )}
                 </div>
@@ -528,10 +637,16 @@ export default function Products() {
                   </button>
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50"
+                    disabled={loading || uploadingImage || !imageUrl}
+                    className="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50 flex items-center justify-center"
                   >
-                    {loading ? 'Adding...' : 'Add Product'}
+                    {loading && (
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    )}
+                    {loading ? 'Adding Product...' : 'Add Product'}
                   </button>
                 </div>
               </form>

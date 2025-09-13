@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useState, useContext } from 'react';
+import axios from 'axios';
+import Swal from 'sweetalert2';
+import AuthContext from '../../providers/AuthContext';
 
 // Sample products data
 const productsData = [
@@ -14,10 +17,108 @@ const productsData = [
 const categories = [...new Set(productsData.map(product => product.category))];
 
 export default function Products() {
+  const { user } = useContext(AuthContext);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isGridView, setIsGridView] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  // Form states for add product
+  const [productName, setProductName] = useState('');
+  const [description, setDescription] = useState('');
+  const [stockQuantity, setStockQuantity] = useState(0);
+  const [price, setPrice] = useState(0);
+  const [weight, setWeight] = useState(0);
+  const [imagePreview, setImagePreview] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Handle image file selection
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          // Resize to max 800px width/height
+          const maxSize = 800;
+          let { width, height } = img;
+          if (width > height) {
+            if (width > maxSize) {
+              height = (height * maxSize) / width;
+              width = maxSize;
+            }
+          } else {
+            if (height > maxSize) {
+              width = (width * maxSize) / height;
+              height = maxSize;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          setImagePreview(compressedDataUrl);
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Handle form submission
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!user) {
+      alert('User not authenticated');
+      return;
+    }
+    setLoading(true);
+    try {
+      const formData = {
+        productName,
+        description,
+        stockQuantity: Number(stockQuantity),
+        price: Number(price),
+        weight: Number(weight),
+        image: imagePreview.split(',')[1], // Remove data:image/...;base64, prefix
+        distributorId: user.userId
+      };
+      await axios.post('/api/v1/products', formData, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      Swal.fire({
+        icon: 'success',
+        title: 'Success!',
+        text: 'Product added successfully!',
+        confirmButtonColor: '#3085d6'
+      });
+      // Reset form
+      setProductName('');
+      setDescription('');
+      setStockQuantity(0);
+      setPrice(0);
+      setWeight(0);
+      setImagePreview('');
+      setShowAddModal(false);
+    } catch (error) {
+      console.error('Error adding product:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error!',
+        text: 'Failed to add product. Please try again.',
+        confirmButtonColor: '#d33'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Filter products based on search term, category and status
   const filteredProducts = productsData.filter(product => {
@@ -82,6 +183,7 @@ export default function Products() {
           
           {/* Add product button */}
           <button
+            onClick={() => setShowAddModal(true)}
             className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             <svg
@@ -330,6 +432,109 @@ export default function Products() {
                   </svg>
                 </button>
               </nav>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Add Product Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <button
+              onClick={() => setShowAddModal(false)}
+              className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 focus:outline-none"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="mt-3">
+              <h3 className="text-lg leading-6 font-medium text-gray-900 text-center">Add New Product</h3>
+              <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Product Name</label>
+                  <input
+                    type="text"
+                    value={productName}
+                    onChange={(e) => setProductName(e.target.value)}
+                    required
+                    className="mt-1 px-3 py-2 border border-gray-300 rounded-md w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Description</label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    required
+                    className="mt-1 px-3 py-2 border border-gray-300 rounded-md w-full"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Stock Quantity</label>
+                    <input
+                      type="number"
+                      value={stockQuantity}
+                      onChange={(e) => setStockQuantity(e.target.value)}
+                      required
+                      className="mt-1 px-3 py-2 border border-gray-300 rounded-md w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Price</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      required
+                      className="mt-1 px-3 py-2 border border-gray-300 rounded-md w-full"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Weight</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={weight}
+                    onChange={(e) => setWeight(e.target.value)}
+                    required
+                    className="mt-1 px-3 py-2 border border-gray-300 rounded-md w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Image</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    required
+                    className="mt-1 px-3 py-2 border border-gray-300 rounded-md w-full"
+                  />
+                  {imagePreview && (
+                    <img src={imagePreview} alt="Preview" className="mt-2 w-32 h-32 object-cover rounded-md" />
+                  )}
+                </div>
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50"
+                  >
+                    {loading ? 'Adding...' : 'Add Product'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>

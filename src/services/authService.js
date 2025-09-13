@@ -86,6 +86,50 @@ export const getUserInfo = () => {
 };
 
 /**
+ * Fetches all distributors from the API
+ * @returns {Promise} - Response object with distributors data
+ */
+export const fetchDistributors = async () => {
+  try {
+    // Get the access token
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+    
+    // Use proxied URL to avoid CORS issues
+    const apiUrl = '/api/v1/distributor/all';
+    
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    if (!response.ok) {
+      let errorMessage = `Failed to fetch distributors with status: ${response.status}`;
+      
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch (jsonError) {
+        console.error('Could not parse error response as JSON:', jsonError);
+      }
+      
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error fetching distributors:", error);
+    throw error;
+  }
+};
+
+/**
  * Registers a new distributor
  * @param {object} distributorData - Distributor registration data
  * @returns {Promise} - Response object with registration result
@@ -163,9 +207,26 @@ export const registerDistributor = async (distributorData) => {
         console.error('Could not parse error response as JSON:', jsonError);
       }
       
-      // Special handling for 403 errors (authorization issues)
-      if (response.status === 403) {
-        errorMessage = 'Authorization failed. Please ensure you have admin privileges and are properly logged in.';
+      // Special handling based on status codes
+      switch (response.status) {
+        case 400:
+          errorMessage = 'Invalid data provided. Please check your form and try again.';
+          break;
+        case 401:
+          errorMessage = 'Authentication failed. Please log in again.';
+          break;
+        case 403:
+          errorMessage = 'Authorization failed. Please ensure you have admin privileges and are properly logged in.';
+          break;
+        case 409:
+          errorMessage = 'A distributor with this email or phone already exists.';
+          break;
+        case 500:
+          errorMessage = 'Server error. Please try again later or contact support.';
+          break;
+        default:
+          // Use the message from the server if available
+          break;
       }
       
       throw new Error(errorMessage);

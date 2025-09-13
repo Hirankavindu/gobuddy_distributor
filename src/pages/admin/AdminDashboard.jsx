@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../providers/useAuth';
-import { registerDistributor } from '../../services/authService';
+import { registerDistributor, fetchDistributors } from '../../services/authService';
+import Swal from 'sweetalert2';
 
 function AdminDashboard() {
   const { user, handleLogout } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [distributors, setDistributors] = useState([]);
+  const [distributorsLoading, setDistributorsLoading] = useState(false);
   
   // Check if user is logged in and has admin role
   useEffect(() => {
@@ -15,10 +18,39 @@ function AdminDashboard() {
       navigate('/');
     }
   }, [navigate]);
+  
+  // Load distributors when the view-distributors tab is active
+  useEffect(() => {
+    if (activeTab === 'view-distributors') {
+      loadDistributors();
+    }
+  }, [activeTab]);
+
+  // Function to fetch distributors
+  const loadDistributors = async () => {
+    setDistributorsLoading(true);
+    try {
+      const data = await fetchDistributors();
+      setDistributors(data || []);
+    } catch (error) {
+      Swal.fire({
+        title: 'Error',
+        text: `Failed to load distributors: ${error.message}`,
+        icon: 'error',
+        confirmButtonColor: '#3085d6'
+      });
+      setDistributors([]);
+    } finally {
+      setDistributorsLoading(false);
+    }
+  };
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [profileImage, setProfileImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [validationErrors, setValidationErrors] = useState({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     phone: '',
@@ -127,25 +159,96 @@ function AdminDashboard() {
     }
   };
   
+  // Validate email format
+  const validateEmail = (email) => {
+    const re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+    return re.test(String(email).toLowerCase());
+  };
+  
+  // Validate password strength
+  const validatePassword = (password) => {
+    // At least 8 chars, one letter, one number, and one symbol
+    const re = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/;
+    return re.test(password);
+  };
+  
+  // Validate phone number (basic validation)
+  const validatePhone = (phone) => {
+    // Remove all non-digit characters and check length
+    const digits = phone.replace(/\D/g, '');
+    return digits.length >= 10;
+  };
+  
+  // Form validation
+  const validateForm = () => {
+    const errors = {};
+    
+    // Email validation
+    if (!formData.email) {
+      errors.email = 'Email is required';
+    } else if (!validateEmail(formData.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+    
+    // Phone validation
+    if (!formData.phone) {
+      errors.phone = 'Phone number is required';
+    } else if (!validatePhone(formData.phone)) {
+      errors.phone = 'Please enter a valid phone number (min 10 digits)';
+    }
+    
+    // Password validation
+    if (!formData.password) {
+      errors.password = 'Password is required';
+    } else if (!validatePassword(formData.password)) {
+      errors.password = 'Password must be at least 8 characters with at least one letter, one number, and one special character';
+    }
+    
+    // Confirm password
+    if (formData.password !== formData.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
+    }
+    
+    // Required fields
+    if (!formData.distributorName) {
+      errors.distributorName = 'Distributor name is required';
+    }
+    
+    if (!formData.distributorAddress.address1) {
+      errors.address1 = 'Address is required';
+    }
+    
+    if (!formData.distributorAddress.city) {
+      errors.city = 'City is required';
+    }
+    
+    // Delivery dates validation
+    if (formData.deliveryDates === '') {
+      errors.deliveryDates = 'Please select at least one delivery day';
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+  
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setMessage(null);
     
-    // Password confirmation validation
-    if (formData.password !== formData.confirmPassword) {
-      setMessage({ type: 'error', text: 'Passwords do not match' });
-      setLoading(false);
+    // Validate form
+    if (!validateForm()) {
+      // Show error message using SweetAlert
+      Swal.fire({
+        title: 'Validation Error',
+        text: 'Please fix the highlighted errors in the form',
+        icon: 'error',
+        confirmButtonColor: '#3085d6',
+      });
       return;
     }
     
-    // Validate delivery dates
-    if (formData.deliveryDates === '') {
-      setMessage({ type: 'error', text: 'Please select at least one delivery day' });
-      setLoading(false);
-      return;
-    }
+    setLoading(true);
     
     try {
       // Convert image to Base64 if available
@@ -201,9 +304,12 @@ function AdminDashboard() {
       const response = await registerDistributor(distributorData);
       
       if (response && response.success) {
-        setMessage({ 
-          type: 'success', 
-          text: `Distributor registered successfully! ID: ${response.data.entityCode}` 
+        // Show success message with SweetAlert
+        Swal.fire({
+          title: 'Success!',
+          text: `Distributor registered successfully! ID: ${response.data.entityCode}`,
+          icon: 'success',
+          confirmButtonColor: '#3085d6'
         });
         
         // Reset form after successful submission
@@ -244,9 +350,13 @@ function AdminDashboard() {
       }
     } catch (error) {
       console.error('Registration error:', error);
-      setMessage({ 
-        type: 'error', 
-        text: error.message || 'Failed to register distributor. Please try again.' 
+      
+      // Show error with SweetAlert
+      Swal.fire({
+        title: 'Registration Failed',
+        text: error.message || 'Failed to register distributor. Please try again.',
+        icon: 'error',
+        confirmButtonColor: '#3085d6'
       });
     } finally {
       setLoading(false);
@@ -285,6 +395,19 @@ function AdminDashboard() {
             <span className="text-gray-800 dark:text-gray-200">Dashboard</span>
           </div>
           <div 
+            onClick={() => handleTabChange('view-distributors')} 
+            className={`flex items-center px-6 py-3 cursor-pointer ${
+              activeTab === 'view-distributors' 
+                ? 'bg-blue-100 border-l-4 border-blue-500 dark:bg-gray-700'
+                : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-3 text-gray-600 dark:text-gray-300">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+            </svg>
+            <span className="text-gray-800 dark:text-gray-200">View Distributors</span>
+          </div>
+          <div 
             onClick={() => handleTabChange('new-distributor')} 
             className={`flex items-center px-6 py-3 cursor-pointer ${
               activeTab === 'new-distributor' 
@@ -321,7 +444,11 @@ function AdminDashboard() {
         <header className="bg-white dark:bg-gray-800 shadow sticky top-0 z-10">
           <div className="py-6 px-6 flex justify-between items-center">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {activeTab === 'dashboard' ? 'Admin Dashboard' : 'Add New Distributor'}
+              {activeTab === 'dashboard' 
+                ? 'Admin Dashboard' 
+                : activeTab === 'view-distributors' 
+                  ? 'Registered Distributors' 
+                  : 'Add New Distributor'}
             </h1>
             <div className="flex items-center">
               <span className="text-gray-600 dark:text-gray-300 mr-4">
@@ -332,6 +459,115 @@ function AdminDashboard() {
         </header>
         
         <main className="py-6 px-6 overflow-y-auto">
+          {activeTab === 'view-distributors' && (
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-medium text-gray-900 dark:text-white">All Registered Distributors</h2>
+                <button 
+                  onClick={loadDistributors}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <span className="flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                    </svg>
+                    Refresh
+                  </span>
+                </button>
+              </div>
+              
+              <div className="overflow-x-auto overflow-y-auto max-h-[600px] rounded-md shadow">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 table-fixed">
+                  <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10 shadow-sm">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        Distributor Name
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        Phone
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        Registration Number
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        Registered On
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
+                    {distributorsLoading ? (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-4 text-center">
+                          <div className="flex items-center justify-center">
+                            <svg className="animate-spin h-5 w-5 mr-3 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Loading distributors...
+                          </div>
+                        </td>
+                      </tr>
+                    ) : distributors.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                          No distributors found. Add new distributors or refresh the list.
+                        </td>
+                      </tr>
+                    ) : (
+                      distributors.map((distributor, index) => (
+                        <tr key={distributor.id || index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white h-14">
+                            {distributor.distributorName || 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 h-14">
+                            {distributor.email}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 h-14">
+                            {distributor.phone}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 h-14">
+                            {distributor.registrationNumber || 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            {distributor.active ? (
+                              <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100">
+                                Active
+                              </span>
+                            ) : (
+                              <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100">
+                                Inactive
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {distributor.registeredDate ? new Date(distributor.registeredDate).toLocaleDateString() : 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-3">
+                              View
+                            </button>
+                            <button className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300">
+                              Edit
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'dashboard' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Dashboard Cards */}
@@ -412,8 +648,9 @@ function AdminDashboard() {
                         value={formData.email}
                         onChange={handleInputChange}
                         required
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                        className={`w-full px-3 py-2 border ${validationErrors.email ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white`}
                       />
+                      {validationErrors.email && <p className="mt-1 text-sm text-red-500">{validationErrors.email}</p>}
                     </div>
                     <div>
                       <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -426,8 +663,10 @@ function AdminDashboard() {
                         value={formData.phone}
                         onChange={handleInputChange}
                         required
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                        placeholder="e.g., 1234567890"
+                        className={`w-full px-3 py-2 border ${validationErrors.phone ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white`}
                       />
+                      {validationErrors.phone && <p className="mt-1 text-sm text-red-500">{validationErrors.phone}</p>}
                     </div>
                   </div>
                   
@@ -436,29 +675,67 @@ function AdminDashboard() {
                       <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Password*
                       </label>
-                      <input
-                        type="password"
-                        id="password"
-                        name="password"
-                        value={formData.password}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          id="password"
+                          name="password"
+                          value={formData.password}
+                          onChange={handleInputChange}
+                          required
+                          className={`w-full px-3 py-2 pr-10 border ${validationErrors.password ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white`}
+                        />
+                        <button
+                          type="button"
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                            </svg>
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                      {validationErrors.password && <p className="mt-1 text-sm text-red-500">{validationErrors.password}</p>}
                     </div>
                     <div>
                       <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Confirm Password*
                       </label>
-                      <input
-                        type="password"
-                        id="confirmPassword"
-                        name="confirmPassword"
-                        value={formData.confirmPassword}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          id="confirmPassword"
+                          name="confirmPassword"
+                          value={formData.confirmPassword}
+                          onChange={handleInputChange}
+                          required
+                          className={`w-full px-3 py-2 pr-10 border ${validationErrors.confirmPassword ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white`}
+                        />
+                        <button
+                          type="button"
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        >
+                          {showConfirmPassword ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                            </svg>
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                      {validationErrors.confirmPassword && <p className="mt-1 text-sm text-red-500">{validationErrors.confirmPassword}</p>}
                     </div>
                   </div>
                   
@@ -497,8 +774,9 @@ function AdminDashboard() {
                       value={formData.distributorName}
                       onChange={handleInputChange}
                       required
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                      className={`w-full px-3 py-2 border ${validationErrors.distributorName ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white`}
                     />
+                    {validationErrors.distributorName && <p className="mt-1 text-sm text-red-500">{validationErrors.distributorName}</p>}
                   </div>
                   
                   <div className="mb-4">
@@ -596,8 +874,9 @@ function AdminDashboard() {
                         value={formData.distributorAddress.address1}
                         onChange={handleInputChange}
                         required
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                        className={`w-full px-3 py-2 border ${validationErrors.address1 ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white`}
                       />
+                      {validationErrors.address1 && <p className="mt-1 text-sm text-red-500">{validationErrors.address1}</p>}
                     </div>
                     <div>
                       <label htmlFor="address2" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -639,8 +918,9 @@ function AdminDashboard() {
                         value={formData.distributorAddress.city}
                         onChange={handleInputChange}
                         required
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                        className={`w-full px-3 py-2 border ${validationErrors.city ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white`}
                       />
+                      {validationErrors.city && <p className="mt-1 text-sm text-red-500">{validationErrors.city}</p>}
                     </div>
                     <div>
                       <label htmlFor="postalCode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

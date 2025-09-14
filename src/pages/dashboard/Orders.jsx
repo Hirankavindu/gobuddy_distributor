@@ -474,7 +474,7 @@ export default function Orders() {
                           onClick={() => handleAssignDelivery(order.id)}
                           className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                         >
-                          Assign Delivery
+                          {order.status === 'IN_TRANSIT' ? 'Ongoing' : 'Assign Delivery'}
                         </button>
                       )}
                     </td>

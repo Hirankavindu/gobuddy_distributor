@@ -187,12 +187,24 @@ export default function Orders() {
         return;
       }
 
-      // Here you would make the API call to assign the driver
-      // For now, just show success message
+      // Make API call to assign delivery driver
+      const response = await fetch(`/api/v1/orders/${selectedOrderId}/delivery-person/${selectedDeliveryPerson}/confirm`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Show success message
       Swal.fire({
         icon: 'success',
-        title: 'Success!',
-        text: 'Delivery driver assigned successfully!',
+        title: 'Successfully Assigned!',
+        text: 'Delivery driver has been assigned to the order.',
         timer: 2000,
         showConfirmButton: false
       });
@@ -204,7 +216,7 @@ export default function Orders() {
       console.error('Error assigning driver:', error);
       Swal.fire({
         icon: 'error',
-        title: 'Error',
+        title: 'Assignment Failed',
         text: 'Failed to assign delivery driver. Please try again.',
       });
     }

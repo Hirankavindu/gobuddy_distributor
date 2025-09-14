@@ -220,6 +220,45 @@ export default function Products() {
     }
   };
 
+  // Handle product deletion
+  const handleDeleteProduct = async (productId, productName) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: `Do you want to delete "${productName}"?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await productsAPI.delete(productId);
+        
+        Swal.fire({
+          icon: 'success',
+          title: 'Deleted!',
+          text: 'Product has been deleted successfully.',
+          timer: 2000,
+          showConfirmButton: false
+        });
+
+        // Refresh products list
+        fetchProducts();
+      } catch (error) {
+        console.error('Error deleting product:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error!',
+          text: 'Failed to delete product. Please try again.',
+          confirmButtonColor: '#d33'
+        });
+      }
+    }
+  };
+
   // Filter products based on search term, category and status
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -468,8 +507,14 @@ export default function Products() {
                     </span>
                   </div>
                   <div>
-                    <button className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium">
+                    <button className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium mr-3">
                       Edit
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteProduct(product.productId, product.productName)}
+                      className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
+                    >
+                      Delete
                     </button>
                   </div>
                 </div>
@@ -540,7 +585,10 @@ export default function Products() {
                       <button className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-4">
                         Edit
                       </button>
-                      <button className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300">
+                      <button 
+                        onClick={() => handleDeleteProduct(product.productId, product.productName)}
+                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                      >
                         Delete
                       </button>
                     </td>

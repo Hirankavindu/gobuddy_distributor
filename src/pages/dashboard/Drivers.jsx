@@ -15,6 +15,22 @@ const deliveryAreas = [
   'polonnaruwa'
 ];
 
+// Vehicle types dropdown options
+const vehicleTypes = [
+  'van',
+  'truck',
+  'bike',
+  'car',
+  'motorcycle'
+];
+
+// Working days dropdown options
+const workingDaysOptions = [
+  'weekdays',
+  'weekend',
+  'full week'
+];
+
 // Sample drivers data
 const driversData = [
   { id: 1, name: 'John Smith', vehicleType: 'Van', licensePlate: 'ABC-1234', phone: '(555) 123-4567', area: 'North', status: 'active' },
@@ -611,15 +627,20 @@ export default function Drivers() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Vehicle Type *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     name="vehicleType"
                     required
                     value={formData.vehicleType}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                    placeholder="e.g., Van, Truck, Bike"
-                  />
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="">Select vehicle type</option>
+                    {vehicleTypes.map((type) => (
+                      <option key={type} value={type}>
+                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -642,15 +663,20 @@ export default function Drivers() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Working Days *
                 </label>
-                <input
-                  type="text"
+                <select
                   name="workingDays"
                   required
                   value={formData.workingDays}
                   onChange={handleInputChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="e.g., Monday-Friday, Weekends"
-                />
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                >
+                  <option value="">Select working days</option>
+                  {workingDaysOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option.charAt(0).toUpperCase() + option.slice(1)}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Image Uploads */}

@@ -59,7 +59,16 @@ export default function Orders() {
 
     if (result.isConfirmed) {
       try {
-        await ordersAPI.updateStatus(orderId, newStatus);
+        if (newStatus === 'CONFIRMED') {
+          // Use the new confirm endpoint for accepting orders
+          console.log('Making confirm request for order:', orderId);
+          const response = await ordersAPI.confirm(orderId);
+          console.log('Confirm response:', response);
+        } else {
+          // Use the existing updateStatus endpoint for rejecting orders
+          console.log('Making reject request for order:', orderId);
+          await ordersAPI.updateStatus(orderId, newStatus);
+        }
 
         Swal.fire({
           icon: 'success',
@@ -73,6 +82,9 @@ export default function Orders() {
         fetchOrders();
       } catch (error) {
         console.error('Error updating order status:', error);
+        console.error('Error response:', error.response);
+        console.error('Error status:', error.response?.status);
+        console.error('Error data:', error.response?.data);
         Swal.fire({
           icon: 'error',
           title: 'Error!',
@@ -81,9 +93,7 @@ export default function Orders() {
         });
       }
     }
-  };
-
-  // Filter orders based on search term and status
+  };  // Filter orders based on search term and status
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           order.shopId.toLowerCase().includes(searchTerm.toLowerCase());

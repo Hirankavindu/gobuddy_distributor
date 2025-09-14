@@ -161,6 +161,7 @@ export const ordersAPI = {
   update: (id, orderData) => api.put(`/orders/${id}`, orderData),
   delete: (id) => api.delete(`/orders/${id}`),
   updateStatus: (id, status) => api.patch(`/orders/${id}/status`, { status }),
+  confirm: (id) => api.post(`/orders/${id}/confirm`),
 };
 
 export const requestsAPI = {

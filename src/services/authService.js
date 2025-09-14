@@ -1,4 +1,5 @@
 // This service handles all authentication related operations including login and token storage
+import axios from 'axios';
 
 /**
  * Handles user login
@@ -10,26 +11,15 @@ export const login = async (email, password) => {
   try {
     // Use proxied URL to avoid CORS issues
     const apiUrl = '/api/v1/auth/login';
-    
+
     console.log('Attempting to login with:', { email, apiUrl });
-    
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ email, password })
-    });
+
+    const response = await axios.post(apiUrl, { email, password });
 
     console.log('Login response status:', response.status);
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Login error response:', errorData);
-      throw new Error(errorData.message || 'Login failed');
-    }
 
-    const data = await response.json();
+    const data = response.data;
+
     console.log('Login successful, received data:', data);
     
     // Save tokens and user info to local storage
@@ -42,7 +32,8 @@ export const login = async (email, password) => {
     return data;
   } catch (error) {
     console.error("Login error:", error);
-    throw error;
+    const errorMessage = error.response?.data?.message || error.message || 'Login failed';
+    throw new Error(errorMessage);
   }
 };
 
@@ -100,32 +91,17 @@ export const fetchDistributors = async () => {
     // Use proxied URL to avoid CORS issues
     const apiUrl = '/api/v1/distributor/all';
     
-    const response = await fetch(apiUrl, {
-      method: 'GET',
+    const response = await axios.get(apiUrl, {
       headers: {
-        'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       }
     });
     
-    if (!response.ok) {
-      let errorMessage = `Failed to fetch distributors with status: ${response.status}`;
-      
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.message || errorMessage;
-      } catch (jsonError) {
-        console.error('Could not parse error response as JSON:', jsonError);
-      }
-      
-      throw new Error(errorMessage);
-    }
-
-    const data = await response.json();
-    return data;
+    return response.data;
   } catch (error) {
     console.error("Error fetching distributors:", error);
-    throw error;
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch distributors';
+    throw new Error(errorMessage);
   }
 };
 
@@ -185,59 +161,40 @@ export const registerDistributor = async (distributorData) => {
     // Log the final payload JSON
     console.log('Final JSON payload:', JSON.stringify(finalPayload));
     
-    const response = await fetch(apiUrl, {
-      method: 'POST',
+    const response = await axios.post(apiUrl, finalPayload, {
       headers: {
-        'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}` // Admin token for authorization
-      },
-      body: JSON.stringify(finalPayload)
+      }
     });
 
     console.log('Registration response status:', response.status);
     
-    if (!response.ok) {
-      let errorMessage = `Registration failed with status: ${response.status}`;
-      
-      try {
-        const errorData = await response.json();
-        console.error('Registration error response:', errorData);
-        errorMessage = errorData.message || errorMessage;
-      } catch (jsonError) {
-        console.error('Could not parse error response as JSON:', jsonError);
-      }
-      
-      // Special handling based on status codes
-      switch (response.status) {
-        case 400:
-          errorMessage = 'Invalid data provided. Please check your form and try again.';
-          break;
-        case 401:
-          errorMessage = 'Authentication failed. Please log in again.';
-          break;
-        case 403:
-          errorMessage = 'Authorization failed. Please ensure you have admin privileges and are properly logged in.';
-          break;
-        case 409:
-          errorMessage = 'A distributor with this email or phone already exists.';
-          break;
-        case 500:
-          errorMessage = 'Server error. Please try again later or contact support.';
-          break;
-        default:
-          // Use the message from the server if available
-          break;
-      }
-      
-      throw new Error(errorMessage);
-    }
-
-    const data = await response.json();
+    const data = response.data;
     console.log('Registration successful:', data);
     
     return data;
   } catch (error) {
     console.error("Registration error:", error);
-    throw error;
+    const errorMessage = error.response?.data?.message || error.message || 'Registration failed';
+    
+    // Special handling based on status codes
+    if (error.response?.status) {
+      switch (error.response.status) {
+        case 400:
+          throw new Error('Invalid data provided. Please check your form and try again.');
+        case 401:
+          throw new Error('Authentication failed. Please log in again.');
+        case 403:
+          throw new Error('Authorization failed. Please ensure you have admin privileges and are properly logged in.');
+        case 409:
+          throw new Error('A distributor with this email or phone already exists.');
+        case 500:
+          throw new Error('Server error. Please try again later or contact support.');
+        default:
+          throw new Error(errorMessage);
+      }
+    }
+    
+    throw new Error(errorMessage);
   }
 };

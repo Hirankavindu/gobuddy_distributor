@@ -13,6 +13,8 @@ function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [distributors, setDistributors] = useState([]);
   const [distributorsLoading, setDistributorsLoading] = useState(false);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [selectedDistributor, setSelectedDistributor] = useState(null);
   
   // Function to fetch distributors
   const loadDistributors = useCallback(async () => {
@@ -111,6 +113,18 @@ function AdminDashboard() {
       }
     }
   }, [loadDistributors]);
+
+  // Function to view distributor details
+  const viewDistributor = useCallback((distributor) => {
+    setSelectedDistributor(distributor);
+    setViewModalOpen(true);
+  }, []);
+
+  // Function to close view modal
+  const closeViewModal = useCallback(() => {
+    setViewModalOpen(false);
+    setSelectedDistributor(null);
+  }, []);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -620,7 +634,8 @@ function AdminDashboard() {
         </header>
         
         <main className="py-6 px-6 overflow-y-auto">
-          {activeTab === 'view-distributors' && (
+          <div>
+            {activeTab === 'view-distributors' && (
             <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-medium text-gray-900 dark:text-white">All Registered Distributors</h2>
@@ -713,7 +728,10 @@ function AdminDashboard() {
                             {distributor.registeredDate ? new Date(distributor.registeredDate).toLocaleDateString() : 'N/A'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-3">
+                            <button 
+                              onClick={() => viewDistributor(distributor)}
+                              className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-3"
+                            >
                               View
                             </button>
                             <button className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 mr-3">
@@ -1330,7 +1348,183 @@ function AdminDashboard() {
               </form>
             </div>
           )}
+        </div>
         </main>
+
+        {/* Distributor View Modal */}
+        {viewModalOpen && selectedDistributor && (
+          <div className="fixed inset-0 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  Distributor Details
+                </h3>
+                <button
+                  onClick={closeViewModal}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                {/* Basic Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Distributor Name</label>
+                    <p className="mt-1 text-sm text-gray-900 dark:text-white">{selectedDistributor.distributorName || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+                    <p className="mt-1 text-sm text-gray-900 dark:text-white">{selectedDistributor.email}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
+                    <p className="mt-1 text-sm text-gray-900 dark:text-white">{selectedDistributor.phone}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Registration Number</label>
+                    <p className="mt-1 text-sm text-gray-900 dark:text-white">{selectedDistributor.registrationNumber || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
+                    <p className="mt-1 text-sm">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        selectedDistributor.status === 'ACTIVE' 
+                          ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' 
+                          : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
+                      }`}>
+                        {selectedDistributor.status || 'N/A'}
+                      </span>
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Distributor Code</label>
+                    <p className="mt-1 text-sm text-gray-900 dark:text-white">{selectedDistributor.distributorCode || 'N/A'}</p>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+                  <p className="mt-1 text-sm text-gray-900 dark:text-white">{selectedDistributor.distributorDescription || 'N/A'}</p>
+                </div>
+
+                {/* Delivery Information */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Delivery Description</label>
+                  <p className="mt-1 text-sm text-gray-900 dark:text-white">{selectedDistributor.deliveryDescription || 'N/A'}</p>
+                </div>
+
+                {/* Contact Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Alternative Contact Number</label>
+                    <p className="mt-1 text-sm text-gray-900 dark:text-white">{selectedDistributor.alternativeContactNumber || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
+                    <p className="mt-1 text-sm text-gray-900 dark:text-white">{selectedDistributor.distributorCategory || 'N/A'}</p>
+                  </div>
+                </div>
+
+                {/* Address Information */}
+                {selectedDistributor.distributorAddress && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Address</label>
+                    <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                      <p className="text-sm text-gray-900 dark:text-white">
+                        {selectedDistributor.distributorAddress.address1 && `${selectedDistributor.distributorAddress.address1}, `}
+                        {selectedDistributor.distributorAddress.address2 && `${selectedDistributor.distributorAddress.address2}, `}
+                        {selectedDistributor.distributorAddress.suburb && `${selectedDistributor.distributorAddress.suburb}, `}
+                        {selectedDistributor.distributorAddress.city && `${selectedDistributor.distributorAddress.city}, `}
+                        {selectedDistributor.distributorAddress.postalCode && `${selectedDistributor.distributorAddress.postalCode}`}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        {selectedDistributor.distributorAddress.district && `District: ${selectedDistributor.distributorAddress.district}, `}
+                        {selectedDistributor.distributorAddress.province && `Province: ${selectedDistributor.distributorAddress.province}`}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Business Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Working Days</label>
+                    <p className="mt-1 text-sm text-gray-900 dark:text-white">{selectedDistributor.workingDays || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Opening Times</label>
+                    <p className="mt-1 text-sm text-gray-900 dark:text-white">{selectedDistributor.openingTimes || 'N/A'}</p>
+                  </div>
+                </div>
+
+                {/* Delivery Dates */}
+                {selectedDistributor.deliveryDates && selectedDistributor.deliveryDates.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Delivery Dates</label>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {selectedDistributor.deliveryDates.map((date, index) => (
+                        <span key={index} className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100 rounded">
+                          {date}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Plan Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Plan</label>
+                    <p className="mt-1 text-sm text-gray-900 dark:text-white">{selectedDistributor.planId || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Plan Start Date</label>
+                    <p className="mt-1 text-sm text-gray-900 dark:text-white">
+                      {selectedDistributor.planStartDate ? new Date(selectedDistributor.planStartDate).toLocaleDateString() : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Social Media */}
+                {selectedDistributor.socialMediaLinks && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Social Media Links</label>
+                    <p className="mt-1 text-sm text-gray-900 dark:text-white">{selectedDistributor.socialMediaLinks}</p>
+                  </div>
+                )}
+
+                {/* Images */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {selectedDistributor.profileImage && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Profile Image</label>
+                      <img 
+                        src={selectedDistributor.profileImage} 
+                        alt="Profile" 
+                        className="mt-1 w-20 h-20 object-cover rounded-md border"
+                      />
+                    </div>
+                  )}
+                  {selectedDistributor.distributorImage && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Distributor Image</label>
+                      <img 
+                        src={selectedDistributor.distributorImage} 
+                        alt="Distributor" 
+                        className="mt-1 w-20 h-20 object-cover rounded-md border"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

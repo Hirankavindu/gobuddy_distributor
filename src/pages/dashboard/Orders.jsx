@@ -162,6 +162,32 @@ export default function Orders() {
         </div>
       </div>
 
+      {/* Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
+          <div className="text-2xl font-bold text-gray-900 dark:text-white">{orders.length}</div>
+          <div className="text-sm text-gray-500 dark:text-gray-400">Total Orders</div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
+          <div className="text-2xl font-bold text-green-600">
+            {orders.filter(o => o.status === 'CONFIRMED').length}
+          </div>
+          <div className="text-sm text-gray-500 dark:text-gray-400">Confirmed</div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
+          <div className="text-2xl font-bold text-yellow-600">
+            {orders.filter(o => o.status === 'CREATED').length}
+          </div>
+          <div className="text-sm text-gray-500 dark:text-gray-400">Pending</div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
+          <div className="text-2xl font-bold text-blue-600">
+            ${orders.reduce((sum, o) => sum + (o.total || 0), 0).toFixed(2)}
+          </div>
+          <div className="text-sm text-gray-500 dark:text-gray-400">Total Revenue</div>
+        </div>
+      </div>
+
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1">
@@ -302,32 +328,6 @@ export default function Orders() {
               )}
             </tbody>
           </table>
-        </div>
-      </div>
-
-      {/* Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
-          <div className="text-2xl font-bold text-gray-900 dark:text-white">{orders.length}</div>
-          <div className="text-sm text-gray-500 dark:text-gray-400">Total Orders</div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
-          <div className="text-2xl font-bold text-green-600">
-            {orders.filter(o => o.status === 'CONFIRMED').length}
-          </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400">Confirmed</div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
-          <div className="text-2xl font-bold text-yellow-600">
-            {orders.filter(o => o.status === 'CREATED').length}
-          </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400">Pending</div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
-          <div className="text-2xl font-bold text-blue-600">
-            ${orders.reduce((sum, o) => sum + (o.total || 0), 0).toFixed(2)}
-          </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400">Total Revenue</div>
         </div>
       </div>
     </div>

@@ -1,4 +1,19 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../services/firebase';
+import Swal from 'sweetalert2';
+
+// Delivery areas dropdown options
+const deliveryAreas = [
+  'hambantota',
+  'matara',
+  'galle',
+  'colombo',
+  'gampaha',
+  'kurunagala',
+  'anuradhapura',
+  'polonnaruwa'
+];
 
 // Sample drivers data
 const driversData = [
@@ -13,19 +28,217 @@ export default function Drivers() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [vehicleFilter, setVehicleFilter] = useState('all');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Form state
+  const [formData, setFormData] = useState({
+    email: '',
+    phone: '',
+    password: '',
+    deliveryPersonName: '',
+    nicNumber: '',
+    whatsappNumber: '',
+    alternativeContactNumber: '',
+    vehicleType: '',
+    vehicleNumber: '',
+    deliveryArea: '',
+    workingDays: ''
+  });
+
+  const [profileImage, setProfileImage] = useState(null);
+  const [deliveryPersonImage, setDeliveryPersonImage] = useState(null);
+  const [profileImagePreview, setProfileImagePreview] = useState('');
+  const [deliveryPersonImagePreview, setDeliveryPersonImagePreview] = useState('');
+
+  const profileImageRef = useRef(null);
+  const deliveryPersonImageRef = useRef(null);
 
   // Filter drivers based on search term, status and vehicle type
   const filteredDrivers = driversData.filter(driver => {
     const matchesSearch = driver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           driver.licensePlate.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           driver.area.toLowerCase().includes(searchTerm.toLowerCase());
-                          
+
     const matchesStatus = statusFilter === 'all' || driver.status === statusFilter;
     const matchesVehicle = vehicleFilter === 'all' || driver.vehicleType.toLowerCase() === vehicleFilter.toLowerCase();
-    
+
     return matchesSearch && matchesStatus && matchesVehicle;
   });
-  
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleImageSelect = (e, type) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (type === 'profile') {
+        setProfileImage(file);
+        setProfileImagePreview(URL.createObjectURL(file));
+      } else {
+        setDeliveryPersonImage(file);
+        setDeliveryPersonImagePreview(URL.createObjectURL(file));
+      }
+    }
+  };
+
+  const uploadImageToFirebase = async (file, path) => {
+    return new Promise((resolve, reject) => {
+      const storageRef = ref(storage, `${path}/${Date.now()}_${file.name}`);
+      const uploadTask = uploadBytesResumable(storageRef, file);
+
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setUploadProgress(progress);
+        },
+        (error) => {
+          console.error('Upload error:', error);
+          reject(error);
+        },
+        async () => {
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            resolve(downloadURL);
+          } catch (error) {
+            reject(error);
+          }
+        }
+      );
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setUploadProgress(0);
+
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        Swal.fire({
+          title: 'Authentication Required',
+          text: 'Please log in to add a driver.',
+          icon: 'warning',
+          confirmButtonColor: '#3085d6'
+        });
+        return;
+      }
+
+      let profileImageUrl = '';
+      let deliveryPersonImageUrl = '';
+
+      // Upload profile image if selected
+      if (profileImage) {
+        profileImageUrl = await uploadImageToFirebase(profileImage, 'driver-profiles');
+      }
+
+      // Upload delivery person image if selected
+      if (deliveryPersonImage) {
+        deliveryPersonImageUrl = await uploadImageToFirebase(deliveryPersonImage, 'driver-delivery-images');
+      }
+
+      // Prepare request data
+      const requestData = {
+        ...formData,
+        profileImage: profileImageUrl,
+        deliveryPersonImageUrl: deliveryPersonImageUrl
+      };
+
+      // Make API call
+      const response = await fetch('/api/v1/auth/delivery-person', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        Swal.fire({
+          title: 'Success!',
+          text: 'Driver added successfully!',
+          icon: 'success',
+          confirmButtonColor: '#3085d6'
+        });
+
+        // Reset form and close modal
+        setFormData({
+          email: '',
+          phone: '',
+          password: '',
+          deliveryPersonName: '',
+          nicNumber: '',
+          whatsappNumber: '',
+          alternativeContactNumber: '',
+          vehicleType: '',
+          vehicleNumber: '',
+          deliveryArea: '',
+          workingDays: ''
+        });
+        setProfileImage(null);
+        setDeliveryPersonImage(null);
+        setProfileImagePreview('');
+        setDeliveryPersonImagePreview('');
+        setIsModalOpen(false);
+      } else {
+        throw new Error(result.message || 'Failed to add driver');
+      }
+
+    } catch (error) {
+      console.error('Error adding driver:', error);
+      Swal.fire({
+        title: 'Error',
+        text: `Failed to add driver: ${error.message}`,
+        icon: 'error',
+        confirmButtonColor: '#3085d6'
+      });
+    } finally {
+      setIsLoading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const openModal = () => {
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    // Reset form when closing
+    setFormData({
+      email: '',
+      phone: '',
+      password: '',
+      deliveryPersonName: '',
+      nicNumber: '',
+      whatsappNumber: '',
+      alternativeContactNumber: '',
+      vehicleType: '',
+      vehicleNumber: '',
+      deliveryArea: '',
+      workingDays: ''
+    });
+    setProfileImage(null);
+    setDeliveryPersonImage(null);
+    setProfileImagePreview('');
+    setDeliveryPersonImagePreview('');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
@@ -37,6 +250,7 @@ export default function Drivers() {
         </div>
         <div className="mt-4 sm:mt-0">
           <button
+            onClick={openModal}
             className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             <svg
@@ -109,7 +323,7 @@ export default function Drivers() {
                 <option value="pending">Pending</option>
               </select>
             </div>
-            
+
             <div>
               <label htmlFor="vehicle" className="sr-only">
                 Vehicle
@@ -179,8 +393,8 @@ export default function Drivers() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                      ${driver.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
-                        driver.status === 'inactive' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' : 
+                      ${driver.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                        driver.status === 'inactive' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
                         'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'}`
                     }>
                       {driver.status.charAt(0).toUpperCase() + driver.status.slice(1)}
@@ -199,7 +413,7 @@ export default function Drivers() {
             </tbody>
           </table>
         </div>
-        
+
         {filteredDrivers.length === 0 && (
           <div className="py-12 text-center">
             <svg
@@ -224,6 +438,7 @@ export default function Drivers() {
             <div className="mt-6">
               <button
                 type="button"
+                onClick={openModal}
                 className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 <svg
@@ -247,6 +462,292 @@ export default function Drivers() {
           </div>
         )}
       </div>
+
+      {/* Add Driver Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Add New Delivery Driver
+              </h3>
+              <button
+                onClick={closeModal}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Basic Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Delivery Person Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="deliveryPersonName"
+                    required
+                    value={formData.deliveryPersonName}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    placeholder="Enter full name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Email *
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    required
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    placeholder="Enter email address"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Phone *
+                  </label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    required
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    placeholder="+94xxxxxxxxx"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Password *
+                  </label>
+                  <input
+                    type="password"
+                    name="password"
+                    required
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    placeholder="Enter password"
+                  />
+                </div>
+              </div>
+
+              {/* Additional Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    NIC Number *
+                  </label>
+                  <input
+                    type="text"
+                    name="nicNumber"
+                    required
+                    value={formData.nicNumber}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    placeholder="Enter NIC number"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    WhatsApp Number
+                  </label>
+                  <input
+                    type="tel"
+                    name="whatsappNumber"
+                    value={formData.whatsappNumber}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    placeholder="+94xxxxxxxxx"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Alternative Contact Number
+                  </label>
+                  <input
+                    type="tel"
+                    name="alternativeContactNumber"
+                    value={formData.alternativeContactNumber}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    placeholder="+94xxxxxxxxx"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Delivery Area *
+                  </label>
+                  <select
+                    name="deliveryArea"
+                    required
+                    value={formData.deliveryArea}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="">Select delivery area</option>
+                    {deliveryAreas.map((area) => (
+                      <option key={area} value={area}>
+                        {area.charAt(0).toUpperCase() + area.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Vehicle Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Vehicle Type *
+                  </label>
+                  <input
+                    type="text"
+                    name="vehicleType"
+                    required
+                    value={formData.vehicleType}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    placeholder="e.g., Van, Truck, Bike"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Vehicle Number *
+                  </label>
+                  <input
+                    type="text"
+                    name="vehicleNumber"
+                    required
+                    value={formData.vehicleNumber}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    placeholder="e.g., ABC-1234"
+                  />
+                </div>
+              </div>
+
+              {/* Working Days */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Working Days *
+                </label>
+                <input
+                  type="text"
+                  name="workingDays"
+                  required
+                  value={formData.workingDays}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  placeholder="e.g., Monday-Friday, Weekends"
+                />
+              </div>
+
+              {/* Image Uploads */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Profile Image
+                  </label>
+                  <input
+                    type="file"
+                    ref={profileImageRef}
+                    onChange={(e) => handleImageSelect(e, 'profile')}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                  <div className="mt-1 flex items-center space-x-4">
+                    <button
+                      type="button"
+                      onClick={() => profileImageRef.current?.click()}
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Choose Profile Image
+                    </button>
+                    {profileImagePreview && (
+                      <img
+                        src={profileImagePreview}
+                        alt="Profile preview"
+                        className="h-12 w-12 object-cover rounded-md border"
+                      />
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Delivery Person Image
+                  </label>
+                  <input
+                    type="file"
+                    ref={deliveryPersonImageRef}
+                    onChange={(e) => handleImageSelect(e, 'delivery')}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                  <div className="mt-1 flex items-center space-x-4">
+                    <button
+                      type="button"
+                      onClick={() => deliveryPersonImageRef.current?.click()}
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Choose Delivery Image
+                    </button>
+                    {deliveryPersonImagePreview && (
+                      <img
+                        src={deliveryPersonImagePreview}
+                        alt="Delivery preview"
+                        className="h-12 w-12 object-cover rounded-md border"
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Upload Progress */}
+              {uploadProgress > 0 && uploadProgress < 100 && (
+                <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                  <div
+                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  ></div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Uploading images... {Math.round(uploadProgress)}%
+                  </p>
+                </div>
+              )}
+
+              {/* Form Actions */}
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  disabled={isLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Adding Driver...' : 'Add Driver'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Pagination */}
       {filteredDrivers.length > 0 && (

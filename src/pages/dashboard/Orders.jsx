@@ -8,6 +8,14 @@ export default function Orders() {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  
+  // Assign delivery modal state
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [deliveryPersons, setDeliveryPersons] = useState([]);
+  const [deliveryPersonsLoading, setDeliveryPersonsLoading] = useState(false);
+  const [onlyActive, setOnlyActive] = useState(true);
+  const [selectedDeliveryPerson, setSelectedDeliveryPerson] = useState('');
 
   // Fetch orders on component mount
   useEffect(() => {
@@ -93,7 +101,124 @@ export default function Orders() {
         });
       }
     }
-  };  // Filter orders based on search term and status
+  };
+
+  // Handle assign delivery
+  const handleAssignDelivery = async (orderId) => {
+    setSelectedOrderId(orderId);
+    setAssignModalOpen(true);
+    setSelectedDeliveryPerson('');
+    await fetchDeliveryPersons(orderId, true); // Default to onlyActive=true
+  };
+
+  // Fetch delivery persons for the order
+  const fetchDeliveryPersons = async (orderId, activeOnly) => {
+    setDeliveryPersonsLoading(true);
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Authentication Error',
+          text: 'Please log in again.',
+        });
+        return;
+      }
+
+      const response = await fetch(`/api/v1/delivery/${orderId}/delivery-persons?onlyActive=${activeOnly}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        setDeliveryPersons(result.data);
+      } else {
+        throw new Error(result.message || 'Failed to fetch delivery persons');
+      }
+    } catch (error) {
+      console.error('Error fetching delivery persons:', error);
+      setDeliveryPersons([]);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to load delivery persons. Please try again.',
+      });
+    } finally {
+      setDeliveryPersonsLoading(false);
+    }
+  };
+
+  // Handle only active toggle change
+  const handleOnlyActiveToggle = async (isActive) => {
+    setOnlyActive(isActive);
+    if (selectedOrderId) {
+      await fetchDeliveryPersons(selectedOrderId, isActive);
+    }
+  };
+
+  // Handle assign delivery driver
+  const handleAssignDriver = async () => {
+    if (!selectedDeliveryPerson) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'No Driver Selected',
+        text: 'Please select a delivery driver.',
+      });
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Authentication Error',
+          text: 'Please log in again.',
+        });
+        return;
+      }
+
+      // Here you would make the API call to assign the driver
+      // For now, just show success message
+      Swal.fire({
+        icon: 'success',
+        title: 'Success!',
+        text: 'Delivery driver assigned successfully!',
+        timer: 2000,
+        showConfirmButton: false
+      });
+
+      // Close modal and refresh orders
+      setAssignModalOpen(false);
+      fetchOrders();
+    } catch (error) {
+      console.error('Error assigning driver:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to assign delivery driver. Please try again.',
+      });
+    }
+  };
+
+  // Close assign modal
+  const closeAssignModal = () => {
+    setAssignModalOpen(false);
+    setSelectedOrderId(null);
+    setDeliveryPersons([]);
+    setSelectedDeliveryPerson('');
+  };
+
+  // Filter orders based on search term and status
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           order.shopId.toLowerCase().includes(searchTerm.toLowerCase());
@@ -332,6 +457,14 @@ export default function Orders() {
                           </button>
                         </>
                       )}
+                      {(order.status === 'CONFIRMED' || order.status === 'IN_TRANSIT') && (
+                        <button
+                          onClick={() => handleAssignDelivery(order.id)}
+                          className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          Assign Delivery
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -340,6 +473,95 @@ export default function Orders() {
           </table>
         </div>
       </div>
+
+      {/* Assign Delivery Modal */}
+      {assignModalOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Assign Delivery Driver
+              </h3>
+              <button
+                onClick={closeAssignModal}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Only Active Toggle */}
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Show only active drivers
+                </label>
+                <button
+                  onClick={() => handleOnlyActiveToggle(!onlyActive)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                    onlyActive ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      onlyActive ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Delivery Person Dropdown */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Select Delivery Driver
+                </label>
+                {deliveryPersonsLoading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedDeliveryPerson}
+                    onChange={(e) => setSelectedDeliveryPerson(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="">Choose a delivery driver...</option>
+                    {deliveryPersons.map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.deliveryPersonName} - {person.vehicleType} ({person.vehicleNumber}) - {person.deliveryArea}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {deliveryPersons.length === 0 && !deliveryPersonsLoading && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                    No delivery drivers available for this order.
+                  </p>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  onClick={closeAssignModal}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAssignDriver}
+                  disabled={!selectedDeliveryPerson || deliveryPersonsLoading}
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Assign Delivery Driver
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

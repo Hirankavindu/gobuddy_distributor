@@ -22,27 +22,74 @@ export default function DashboardLayout() {
     navigate('/');
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (newMessage.trim()) {
-      const message = {
+      const userMessage = {
         id: chatMessages.length + 1,
         text: newMessage,
         sender: 'user',
         time: new Date()
       };
-      setChatMessages([...chatMessages, message]);
+      setChatMessages([...chatMessages, userMessage]);
+      const currentMessage = newMessage;
       setNewMessage('');
 
-      // Simulate support response
-      setTimeout(() => {
-        const response = {
+      try {
+        // Get userId and accessToken from localStorage
+        const userId = localStorage.getItem('userId');
+        const accessToken = localStorage.getItem('accessToken');
+
+        if (!userId || !accessToken) {
+          const errorResponse = {
+            id: chatMessages.length + 2,
+            text: 'Authentication required. Please log in again.',
+            sender: 'support',
+            time: new Date()
+          };
+          setChatMessages(prev => [...prev, errorResponse]);
+          return;
+        }
+
+        // Make API call to chat endpoint
+        const response = await fetch(`/api/v1/distributors/${userId}/chat`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            question: currentMessage
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success && result.data) {
+          const botResponse = {
+            id: chatMessages.length + 2,
+            text: result.data.answer,
+            sender: 'support',
+            time: new Date(result.timestamp)
+          };
+          setChatMessages(prev => [...prev, botResponse]);
+        } else {
+          throw new Error(result.message || 'Failed to get response');
+        }
+
+      } catch (error) {
+        console.error('Chat API error:', error);
+        const errorResponse = {
           id: chatMessages.length + 2,
-          text: 'Thank you for your message. Our support team will get back to you shortly.',
+          text: `Sorry, I encountered an error: ${error.message}. Please try again.`,
           sender: 'support',
           time: new Date()
         };
-        setChatMessages(prev => [...prev, response]);
-      }, 1000);
+        setChatMessages(prev => [...prev, errorResponse]);
+      }
     }
   };
 

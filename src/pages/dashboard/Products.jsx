@@ -16,6 +16,21 @@ export default function Products() {
   const [isGridView, setIsGridView] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
 
+  // Edit modal states
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editProductName, setEditProductName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editStockQuantity, setEditStockQuantity] = useState(0);
+  const [editPrice, setEditPrice] = useState(0);
+  const [editWeight, setEditWeight] = useState(0);
+  const [editImageUrl, setEditImageUrl] = useState('');
+  const [editProductStatus, setEditProductStatus] = useState('ACTIVE');
+  const [editImagePreview, setEditImagePreview] = useState('');
+  const [editUploadingImage, setEditUploadingImage] = useState(false);
+  const [editUploadProgress, setEditUploadProgress] = useState(0);
+  const [updating, setUpdating] = useState(false);
+
   // Form states for add product
   const [productName, setProductName] = useState('');
   const [description, setDescription] = useState('');
@@ -220,6 +235,90 @@ export default function Products() {
     }
   };
 
+  // Handle product editing
+  const handleEditProduct = async (productId) => {
+    try {
+      const response = await productsAPI.getById(productId);
+      const product = response.data;
+
+      // Populate edit form with product data
+      setEditingProduct(product);
+      setEditProductName(product.productName || '');
+      setEditDescription(product.description || '');
+      setEditStockQuantity(product.stockQuantity || 0);
+      setEditPrice(product.price || 0);
+      setEditWeight(product.weight || 0);
+      setEditImageUrl(product.imageUrl || '');
+      setEditProductStatus(product.productStatus || 'ACTIVE');
+      setEditImagePreview(product.imageUrl || '');
+      setEditUploadProgress(0);
+
+      setShowEditModal(true);
+    } catch (error) {
+      console.error('Error fetching product details:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error!',
+        text: 'Failed to load product details. Please try again.',
+        confirmButtonColor: '#d33'
+      });
+    }
+  };
+
+  // Handle edit form submission
+  const handleUpdateProduct = async (e) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+
+    setUpdating(true);
+    try {
+      const updateData = {
+        productName: editProductName,
+        description: editDescription,
+        stockQuantity: Number(editStockQuantity),
+        price: Number(editPrice),
+        weight: Number(editWeight),
+        imageUrl: editImageUrl,
+        productStatus: editProductStatus
+      };
+
+      await productsAPI.update(editingProduct.productId, updateData);
+
+      Swal.fire({
+        icon: 'success',
+        title: 'Success!',
+        text: 'Product updated successfully!',
+        confirmButtonColor: '#3085d6'
+      });
+
+      // Reset form and close modal
+      setShowEditModal(false);
+      setEditingProduct(null);
+      setEditProductName('');
+      setEditDescription('');
+      setEditStockQuantity(0);
+      setEditPrice(0);
+      setEditWeight(0);
+      setEditImageUrl('');
+      setEditProductStatus('ACTIVE');
+      setEditImagePreview('');
+      setEditUploadProgress(0);
+
+      // Refresh products list
+      fetchProducts();
+    } catch (error) {
+      console.error('Error updating product:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error!',
+        text: 'Failed to update product. Please try again.',
+        confirmButtonColor: '#d33'
+      });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   // Handle product deletion
   const handleDeleteProduct = async (productId, productName) => {
     const result = await Swal.fire({
@@ -255,6 +354,77 @@ export default function Products() {
           text: 'Failed to delete product. Please try again.',
           confirmButtonColor: '#d33'
         });
+      }
+    }
+  };
+
+  // Handle image change for edit modal
+  const handleEditImageChange = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Check file size limit (10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        Swal.fire({
+          icon: 'error',
+          title: 'File Too Large',
+          text: 'Please select an image smaller than 10MB.',
+        });
+        return;
+      }
+
+      setEditUploadingImage(true);
+      setEditUploadProgress(0);
+
+      // Create preview immediately
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setEditImagePreview(event.target.result);
+      };
+      reader.readAsDataURL(file);
+
+      try {
+        // Check file size - only compress if > 1MB
+        let fileToUpload = file;
+        if (file.size > 1024 * 1024) { // 1MB
+          fileToUpload = await compressImage(file);
+        }
+
+        // Create a unique filename
+        const timestamp = Date.now();
+        const filename = `products/${timestamp}_${file.name}`;
+        const storageRef = ref(storage, filename);
+
+        // Upload the file with progress tracking
+        const uploadTask = uploadBytesResumable(storageRef, fileToUpload);
+
+        // Monitor upload progress
+        uploadTask.on('state_changed',
+          (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setEditUploadProgress(progress);
+          },
+          (error) => {
+            console.error('Upload error:', error);
+            throw error;
+          }
+        );
+
+        // Wait for upload to complete
+        await uploadTask;
+
+        // Get the download URL
+        const downloadURL = await getDownloadURL(storageRef);
+        setEditImageUrl(downloadURL);
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Upload Failed',
+          text: 'Failed to upload image. Please try again.',
+        });
+      } finally {
+        setEditUploadingImage(false);
+        setEditUploadProgress(0);
       }
     }
   };
@@ -507,7 +677,10 @@ export default function Products() {
                     </span>
                   </div>
                   <div>
-                    <button className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium mr-3">
+                    <button 
+                      onClick={() => handleEditProduct(product.productId)}
+                      className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium mr-3"
+                    >
                       Edit
                     </button>
                     <button 
@@ -582,7 +755,10 @@ export default function Products() {
                       {getStatusBadge(product.productStatus)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-4">
+                      <button 
+                        onClick={() => handleEditProduct(product.productId)}
+                        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-4"
+                      >
                         Edit
                       </button>
                       <button 
@@ -764,6 +940,147 @@ export default function Products() {
                       </svg>
                     )}
                     {submitting ? 'Adding Product...' : 'Add Product'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <button
+              onClick={() => setShowEditModal(false)}
+              className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 focus:outline-none"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="mt-3">
+              <h3 className="text-lg leading-6 font-medium text-gray-900 text-center">Edit Product</h3>
+              <form onSubmit={handleUpdateProduct} className="mt-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Product Name</label>
+                  <input
+                    type="text"
+                    value={editProductName}
+                    onChange={(e) => setEditProductName(e.target.value)}
+                    required
+                    className="mt-1 px-3 py-2 border border-gray-300 rounded-md w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Description</label>
+                  <textarea
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    required
+                    className="mt-1 px-3 py-2 border border-gray-300 rounded-md w-full"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Stock Quantity</label>
+                    <input
+                      type="number"
+                      value={editStockQuantity}
+                      onChange={(e) => setEditStockQuantity(e.target.value)}
+                      required
+                      className="mt-1 px-3 py-2 border border-gray-300 rounded-md w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Price</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editPrice}
+                      onChange={(e) => setEditPrice(e.target.value)}
+                      required
+                      className="mt-1 px-3 py-2 border border-gray-300 rounded-md w-full"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Weight</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editWeight}
+                    onChange={(e) => setEditWeight(e.target.value)}
+                    required
+                    className="mt-1 px-3 py-2 border border-gray-300 rounded-md w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Product Status</label>
+                  <select
+                    value={editProductStatus}
+                    onChange={(e) => setEditProductStatus(e.target.value)}
+                    className="mt-1 px-3 py-2 border border-gray-300 rounded-md w-full"
+                  >
+                    <option value="ACTIVE">Active</option>
+                    <option value="INACTIVE">Inactive</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Image</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleEditImageChange}
+                    disabled={editUploadingImage}
+                    className="mt-1 px-3 py-2 border border-gray-300 rounded-md w-full"
+                  />
+                  {editUploadingImage && (
+                    <div className="mt-2">
+                      <div className="flex items-center">
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span className="text-sm text-blue-600">
+                          {editUploadProgress > 0 ? `Uploading... ${Math.round(editUploadProgress)}%` : 'Processing image...'}
+                        </span>
+                      </div>
+                      {editUploadProgress > 0 && (
+                        <div className="mt-2 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${editUploadProgress}%` }}
+                          ></div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {editImagePreview && !editUploadingImage && (
+                    <img src={editImagePreview} alt="Preview" className="mt-2 w-32 h-32 object-cover rounded-md" />
+                  )}
+                </div>
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditModal(false)}
+                    className="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updating || editUploadingImage}
+                    className="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50 flex items-center justify-center"
+                  >
+                    {updating && (
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    )}
+                    {updating ? 'Updating Product...' : 'Update Product'}
                   </button>
                 </div>
               </form>

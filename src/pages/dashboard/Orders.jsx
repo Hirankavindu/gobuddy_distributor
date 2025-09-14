@@ -476,7 +476,7 @@ export default function Orders() {
 
       {/* Assign Delivery Modal */}
       {assignModalOpen && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+        <div className="fixed inset-0 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
           <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">

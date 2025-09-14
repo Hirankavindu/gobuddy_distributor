@@ -1,25 +1,15 @@
-import { useState, useContext } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import Swal from 'sweetalert2';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../services/firebase';
 import AuthContext from '../../providers/AuthContext';
 import { productsAPI } from '../../services/api';
 
-// Sample products data
-const productsData = [
-  { id: 1, name: 'Premium Coffee Beans', category: 'Beverages', price: 24.99, stock: 120, sku: 'COF-001', status: 'active' },
-  { id: 2, name: 'Organic Green Tea', category: 'Beverages', price: 18.50, stock: 85, sku: 'TEA-002', status: 'active' },
-  { id: 3, name: 'Gourmet Chocolate Bars', category: 'Confectionery', price: 12.99, stock: 200, sku: 'CHO-003', status: 'active' },
-  { id: 4, name: 'Artisanal Pasta', category: 'Groceries', price: 8.75, stock: 45, sku: 'PAS-004', status: 'low-stock' },
-  { id: 5, name: 'Flavored Sparkling Water', category: 'Beverages', price: 15.99, stock: 0, sku: 'WAT-005', status: 'out-of-stock' },
-  { id: 6, name: 'Premium Protein Bars', category: 'Health Foods', price: 22.50, stock: 150, sku: 'PRO-006', status: 'active' },
-];
-
-// Product categories for filter
-const categories = [...new Set(productsData.map(product => product.category))];
-
 export default function Products() {
   const { user } = useContext(AuthContext);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -36,7 +26,33 @@ export default function Products() {
   const [imageUrl, setImageUrl] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Fetch products on component mount
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const userId = localStorage.getItem('userId');
+      if (!userId) {
+        setError('User not authenticated. Please log in again.');
+        return;
+      }
+
+      const response = await productsAPI.getByDistributor(userId);
+      setProducts(response.data.content || []);
+    } catch (err) {
+      console.error('Error fetching products:', err);
+      setError(err.response?.data?.message || 'Failed to fetch products');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Handle image file selection and upload to Firebase
   const handleImageChange = async (e) => {
@@ -161,7 +177,7 @@ export default function Products() {
       alert('User not authenticated');
       return;
     }
-    setLoading(true);
+    setSubmitting(true);
     try {
       const formData = {
         productName,
@@ -189,6 +205,8 @@ export default function Products() {
       setImageUrl('');
       setUploadProgress(0);
       setShowAddModal(false);
+      // Refresh products list
+      fetchProducts();
     } catch (error) {
       console.error('Error adding product:', error);
       Swal.fire({
@@ -198,24 +216,28 @@ export default function Products() {
         confirmButtonColor: '#d33'
       });
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   // Filter products based on search term, category and status
-  const filteredProducts = productsData.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          product.sku.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredProducts = products.filter(product => {
+    const matchesSearch = product.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          product.productId.toLowerCase().includes(searchTerm.toLowerCase());
                           
-    const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter;
-    const matchesStatus = statusFilter === 'all' || product.status === statusFilter;
+    const matchesCategory = categoryFilter === 'all' || product.distributor?.distributorCategory === categoryFilter;
+    const matchesStatus = statusFilter === 'all' || product.productStatus.toLowerCase() === statusFilter.toLowerCase();
     
     return matchesSearch && matchesCategory && matchesStatus;
   });
 
+  // Get unique categories from products
+  const categories = [...new Set(products.map(product => product.distributor?.distributorCategory).filter(Boolean))];
+
   // Status badges
   const getStatusBadge = (status) => {
-    switch (status) {
+    const statusLower = status?.toLowerCase();
+    switch (statusLower) {
       case 'active':
         return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">Active</span>;
       case 'low-stock':
@@ -223,7 +245,7 @@ export default function Products() {
       case 'out-of-stock':
         return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">Out of Stock</span>;
       default:
-        return null;
+        return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300">{status || 'Unknown'}</span>;
     }
   };
   
@@ -360,7 +382,41 @@ export default function Products() {
         </div>
       </div>
 
-      {filteredProducts.length === 0 ? (
+      {/* Loading state */}
+      {loading && (
+        <div className="bg-white dark:bg-slate-800 shadow-sm rounded-lg py-12 text-center">
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <span className="ml-3 text-gray-600 dark:text-gray-300">Loading products...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Error state */}
+      {error && !loading && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Error loading products</h3>
+              <div className="mt-2 text-sm text-red-700">{error}</div>
+              <button
+                onClick={fetchProducts}
+                className="mt-2 text-sm text-red-600 hover:text-red-500 underline"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Products display */}
+      {!loading && !error && filteredProducts.length === 0 ? (
         <div className="bg-white dark:bg-slate-800 shadow-sm rounded-lg py-12 text-center">
           <svg
             className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
@@ -386,22 +442,29 @@ export default function Products() {
         // Grid View
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProducts.map((product) => (
-            <div key={product.id} className="bg-white dark:bg-slate-800 rounded-lg shadow-sm overflow-hidden">
+            <div key={product.productId} className="bg-white dark:bg-slate-800 rounded-lg shadow-sm overflow-hidden">
               <div className="p-6">
+                {product.imageUrl && (
+                  <img
+                    className="w-full h-48 object-cover rounded-lg mb-4"
+                    src={product.imageUrl}
+                    alt={product.productName}
+                  />
+                )}
                 <div className="flex justify-between items-start">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">{product.name}</h3>
-                  {getStatusBadge(product.status)}
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">{product.productName}</h3>
+                  {getStatusBadge(product.productStatus)}
                 </div>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{product.category}</p>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{product.distributor?.distributorCategory || 'N/A'}</p>
                 <div className="mt-4">
                   <p className="text-2xl font-semibold text-gray-900 dark:text-white">${product.price.toFixed(2)}</p>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">SKU: {product.sku}</p>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">ID: {product.productId}</p>
                 </div>
                 <div className="mt-4 flex justify-between items-center">
                   <div>
                     <span className="text-sm text-gray-500 dark:text-gray-400">Stock: </span>
-                    <span className={`text-sm font-medium ${product.stock > 50 ? 'text-green-600 dark:text-green-400' : product.stock > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}`}>
-                      {product.stock > 0 ? product.stock : 'Out of stock'}
+                    <span className={`text-sm font-medium ${product.stockQuantity > 50 ? 'text-green-600 dark:text-green-400' : product.stockQuantity > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {product.stockQuantity > 0 ? product.stockQuantity : 'Out of stock'}
                     </span>
                   </div>
                   <div>
@@ -443,24 +506,35 @@ export default function Products() {
               </thead>
               <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
                 {filteredProducts.map((product) => (
-                  <tr key={product.id}>
+                  <tr key={product.productId}>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">{product.name}</div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">SKU: {product.sku}</div>
+                      <div className="flex items-center">
+                        {product.imageUrl && (
+                          <img
+                            className="h-10 w-10 rounded-lg object-cover mr-3"
+                            src={product.imageUrl}
+                            alt={product.productName}
+                          />
+                        )}
+                        <div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">{product.productName}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">ID: {product.productId}</div>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900 dark:text-white">{product.category}</div>
+                      <div className="text-sm text-gray-900 dark:text-white">{product.distributor?.distributorCategory || 'N/A'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900 dark:text-white">${product.price.toFixed(2)}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className={`text-sm font-medium ${product.stock > 50 ? 'text-green-600 dark:text-green-400' : product.stock > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}`}>
-                        {product.stock > 0 ? product.stock : 'Out of stock'}
+                      <div className={`text-sm font-medium ${product.stockQuantity > 50 ? 'text-green-600 dark:text-green-400' : product.stockQuantity > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {product.stockQuantity > 0 ? product.stockQuantity : 'Out of stock'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(product.status)}
+                      {getStatusBadge(product.productStatus)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-4">
@@ -632,16 +706,16 @@ export default function Products() {
                   </button>
                   <button
                     type="submit"
-                    disabled={loading || uploadingImage || !imageUrl}
+                    disabled={submitting || uploadingImage || !imageUrl}
                     className="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50 flex items-center justify-center"
                   >
-                    {loading && (
+                    {submitting && (
                       <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
                     )}
-                    {loading ? 'Adding Product...' : 'Add Product'}
+                    {submitting ? 'Adding Product...' : 'Add Product'}
                   </button>
                 </div>
               </form>

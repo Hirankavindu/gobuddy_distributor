@@ -75,6 +75,42 @@ function AdminDashboard() {
       loadDistributors();
     }
   }, [activeTab, loadDistributors]);
+
+  // Function to delete a distributor
+  const deleteDistributor = useCallback(async (distributorId, distributorName) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: `Do you want to delete distributor "${distributorName}"? This action cannot be undone.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await distributorsAPI.delete(distributorId);
+        Swal.fire({
+          title: 'Deleted!',
+          text: `Distributor "${distributorName}" has been deleted successfully.`,
+          icon: 'success',
+          confirmButtonColor: '#3085d6'
+        });
+        // Reload distributors list
+        loadDistributors();
+      } catch (error) {
+        console.error('Error deleting distributor:', error);
+        Swal.fire({
+          title: 'Error',
+          text: `Failed to delete distributor: ${error.message}`,
+          icon: 'error',
+          confirmButtonColor: '#3085d6'
+        });
+      }
+    }
+  }, [loadDistributors]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -680,8 +716,14 @@ function AdminDashboard() {
                             <button className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-3">
                               View
                             </button>
-                            <button className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300">
+                            <button className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 mr-3">
                               Edit
+                            </button>
+                            <button 
+                              onClick={() => deleteDistributor(distributor.id, distributor.distributorName)}
+                              className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                            >
+                              Delete
                             </button>
                           </td>
                         </tr>

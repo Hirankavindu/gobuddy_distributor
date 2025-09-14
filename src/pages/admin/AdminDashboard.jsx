@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../providers/useAuth';
-import { registerDistributor, fetchDistributors } from '../../services/authService';
+import { registerDistributor } from '../../services/authService';
+import { distributorsAPI } from '../../services/api';
 import Swal from 'sweetalert2';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../services/firebase';
@@ -13,28 +14,35 @@ function AdminDashboard() {
   const [distributors, setDistributors] = useState([]);
   const [distributorsLoading, setDistributorsLoading] = useState(false);
   
-  // Check if user is logged in and has admin role
-  useEffect(() => {
-    const role = localStorage.getItem('role');
-    if (!role || role !== 'SUPER_ADMIN') {
-      navigate('/');
-    }
-  }, [navigate]);
-  
-  // Load distributors when the view-distributors tab is active
-  useEffect(() => {
-    if (activeTab === 'view-distributors') {
-      loadDistributors();
-    }
-  }, [activeTab]);
-
   // Function to fetch distributors
-  const loadDistributors = async () => {
+  const loadDistributors = useCallback(async () => {
+    console.log('Loading distributors...');
+    const token = localStorage.getItem('accessToken');
+    const role = localStorage.getItem('role');
+    
+    console.log('Current token:', token ? 'Token exists' : 'No token');
+    console.log('Current role:', role);
+    
+    if (!token) {
+      console.error('No access token available');
+      Swal.fire({
+        title: 'Authentication Required',
+        text: 'Please log in as an administrator to view distributors.',
+        icon: 'warning',
+        confirmButtonColor: '#3085d6'
+      });
+      navigate('/');
+      return;
+    }
+    
     setDistributorsLoading(true);
     try {
-      const data = await fetchDistributors();
-      setDistributors(data || []);
+      const response = await distributorsAPI.getAll();
+      console.log('Distributors API response:', response);
+      setDistributors(response.data || []);
     } catch (error) {
+      console.error('Error loading distributors:', error);
+      console.error('Error response:', error.response);
       Swal.fire({
         title: 'Error',
         text: `Failed to load distributors: ${error.message}`,
@@ -45,7 +53,28 @@ function AdminDashboard() {
     } finally {
       setDistributorsLoading(false);
     }
-  };
+  }, [navigate]);
+  
+  // Check if user is logged in and has admin role
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    const role = localStorage.getItem('role');
+    
+    console.log('AdminDashboard check - Token exists:', !!token);
+    console.log('AdminDashboard check - Role:', role);
+    
+    if (!token || !role || role !== 'SUPER_ADMIN') {
+      console.log('Redirecting to login - missing token or wrong role');
+      navigate('/');
+    }
+  }, [navigate]);
+  
+  // Load distributors when the view-distributors tab is active
+  useEffect(() => {
+    if (activeTab === 'view-distributors') {
+      loadDistributors();
+    }
+  }, [activeTab, loadDistributors]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);

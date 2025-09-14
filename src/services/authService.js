@@ -29,6 +29,9 @@ export const login = async (email, password) => {
     localStorage.setItem('email', data.email);
     localStorage.setItem('role', data.role);
     
+    console.log('Stored token:', data.accessToken ? 'Token stored' : 'No token');
+    console.log('Stored role:', data.role);
+    
     return data;
   } catch (error) {
     console.error("Login error:", error);

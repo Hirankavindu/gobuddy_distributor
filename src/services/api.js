@@ -16,8 +16,13 @@ api.interceptors.request.use(
     // Get token from localStorage
     const token = localStorage.getItem('accessToken');
     if (token) {
+      // Use Bearer token format for Spring Security
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('Adding auth header (Bearer format):', `Bearer ${token.substring(0, 20)}...`);
+    } else {
+      console.warn('No access token found in localStorage');
     }
+    console.log('Making API request:', config.method?.toUpperCase(), config.url);
     return config;
   },
   (error) => {

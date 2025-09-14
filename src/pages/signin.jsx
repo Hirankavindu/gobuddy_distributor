@@ -10,77 +10,28 @@ function SignIn() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [activeTab, setActiveTab] = useState('distributor'); // 'admin' or 'distributor'
   const navigate = useNavigate();
   const { handleLogin } = useAuth();
-
-  // Handle tab switching
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    setError('');
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    
+
     try {
-      // Handle admin login
-      if (activeTab === 'admin') {
-        try {
-          // Use the same login API for admin, but check role on response
-          const response = await login(email, password);
-          
-          // Verify that the user is an admin
-          if (response.role === 'ADMIN') {
-            // Update auth context
-            handleLogin(response);
-            navigate('/admin');
-          } else {
-            setError('This account does not have admin privileges.');
-          }
-        } catch (error) {
-          console.error('Admin login error:', error);
-          if (email === 'admin@gmail.com' && password === 'Admin123') {
-            // Fallback for demo purposes if backend is not available
-            console.warn('Using fallback admin login (demo mode)');
-            
-            const adminData = {
-              accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbkBnbWFpbC5jb20iLCJyb2xlIjoiQURNSU4iLCJpYXQiOjE2OTQ2MTcwMDAsImV4cCI6MTY5NDcwMzQwMH0.8HHRi6DVTTxcEe9foUkBJZh0bCZZ9dFI2gDgT3yyoiQ',
-              refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbkBnbWFpbC5jb20iLCJpYXQiOjE2OTQ2MTcwMDAsImV4cCI6MTY5NTIyMTgwMH0.hzH0L35Ny0QsTk3Bs7tDQJ1gPwtXBRRJKWX7O9KA1Qc',
-              userId: 'admin-123456',
-              email: 'admin@gmail.com',
-              role: 'ADMIN'
-            };
-            
-            // Save admin tokens and redirect
-            localStorage.setItem('accessToken', adminData.accessToken);
-            localStorage.setItem('refreshToken', adminData.refreshToken);
-            localStorage.setItem('userId', adminData.userId);
-            localStorage.setItem('email', adminData.email);
-            localStorage.setItem('role', adminData.role);
-            
-            // Update auth context
-            handleLogin(adminData);
-            
-            navigate('/admin');
-          } else {
-            setError('Invalid admin credentials. Please try again.');
-          }
-        }
-        setLoading(false);
-        return;
-      }
-      
-      // Distributor login via API
+      // Use the same login endpoint for all users
       const response = await login(email, password);
-      
+
       // Update auth context
       handleLogin(response);
-      
-      // For distributors, always navigate to dashboard
-      navigate('/dashboard');
+
+      // Navigate based on role
+      if (response.role === 'SUPER_ADMIN') {
+        navigate('/admin');
+      } else {
+        // For distributors and other roles, navigate to dashboard
+        navigate('/dashboard');
+      }
     } catch (err) {
       setError('Invalid email or password. Please try again.');
       console.error('Login error:', err);
@@ -98,58 +49,13 @@ function SignIn() {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg overflow-hidden">
-          {/* Tab Navigation */}
-          <div className="flex border-b border-gray-200 dark:border-gray-700">
-            <button
-              onClick={() => handleTabChange('distributor')}
-              className={`flex-1 py-4 px-4 text-center font-medium text-sm focus:outline-none transition-all duration-300 ${
-                activeTab === 'distributor'
-                  ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-500'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              Distributor Login
-            </button>
-            <button
-              onClick={() => handleTabChange('admin')}
-              className={`flex-1 py-4 px-4 text-center font-medium text-sm focus:outline-none transition-all duration-300 ${
-                activeTab === 'admin'
-                  ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-500'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              Admin Login
-            </button>
-          </div>
-          
-          <div className="py-8 px-4 sm:px-10">
-            {error && (
-              <div className="mb-4 p-2 bg-red-100 border border-red-400 text-red-700 rounded">
-                {error}
-              </div>
-            )}
-
-          <div className="tab-content">
-            <div className={`tab-pane ${activeTab === 'distributor' ? 'tab-active' : activeTab === 'admin' ? 'tab-slide-left' : 'tab-slide-right'}`}>
-              <div className="mb-4 text-center">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white">Distributor Login</h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  Sign in to your distributor account
-                </p>
-              </div>
+        <div className="bg-white dark:bg-gray-800 py-8 px-4 shadow sm:rounded-lg sm:px-10">
+          {error && (
+            <div className="mb-4 p-2 bg-red-100 border border-red-400 text-red-700 rounded">
+              {error}
             </div>
+          )}
 
-            <div className={`tab-pane ${activeTab === 'admin' ? 'tab-active' : activeTab === 'distributor' ? 'tab-slide-right' : 'tab-slide-left'}`}>
-              <div className="mb-4 text-center">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white">Admin Login</h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  Sign in to the admin panel
-                </p>
-              </div>
-            </div>
-          </div>
-          
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -165,7 +71,7 @@ function SignIn() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                  placeholder={activeTab === 'admin' ? "admin@gmail.com" : "Enter your email"}
+                  placeholder="Enter your email"
                 />
               </div>
             </div>
@@ -184,7 +90,7 @@ function SignIn() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="appearance-none block w-full pl-3 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                  placeholder={activeTab === 'admin' ? "Admin123" : "Enter your password"}
+                  placeholder="Enter your password"
                 />
                 <button
                   type="button"
@@ -231,11 +137,10 @@ function SignIn() {
                 disabled={loading}
                 className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
-                {loading ? 'Signing in...' : activeTab === 'admin' ? 'Sign in as Admin' : 'Sign in as Distributor'}
+                {loading ? 'Signing in...' : 'Sign in'}
               </button>
             </div>
           </form>
-          </div>
         </div>
       </div>
     </div>

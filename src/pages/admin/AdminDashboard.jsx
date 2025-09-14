@@ -16,7 +16,7 @@ function AdminDashboard() {
   // Check if user is logged in and has admin role
   useEffect(() => {
     const role = localStorage.getItem('role');
-    if (!role || role !== 'ADMIN') {
+    if (!role || role !== 'SUPER_ADMIN') {
       navigate('/');
     }
   }, [navigate]);

@@ -163,8 +163,7 @@ export const ordersAPI = {
 
 export const requestsAPI = {
   getDistributorRequests: (distributorId) => api.get(`/requests/distributor/${distributorId}`),
-  acceptRequest: (requestId) => api.put(`/requests/${requestId}/accept`),
-  rejectRequest: (requestId) => api.put(`/requests/${requestId}/reject`),
+  respondToRequest: (requestId, status) => api.put(`/requests/${requestId}/respond?status=${status}`),
   createRequest: (requestData) => api.post('/requests', requestData),
 };
 

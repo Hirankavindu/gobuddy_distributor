@@ -37,13 +37,13 @@ export default function ConnectionRequests() {
 
   const handleAcceptRequest = async (requestId) => {
     try {
-      await requestsAPI.acceptRequest(requestId);
+      const response = await requestsAPI.respondToRequest(requestId, 'ACCEPTED');
 
-      // Update the request status locally
+      // Update the request status locally with the response data
       setRequests(prevRequests =>
         prevRequests.map(request =>
           request.id === requestId
-            ? { ...request, status: 'accepted', respondedAt: new Date().toISOString() }
+            ? response.data
             : request
         )
       );
@@ -67,13 +67,13 @@ export default function ConnectionRequests() {
 
   const handleRejectRequest = async (requestId) => {
     try {
-      await requestsAPI.rejectRequest(requestId);
+      const response = await requestsAPI.respondToRequest(requestId, 'REJECTED');
 
-      // Update the request status locally
+      // Update the request status locally with the response data
       setRequests(prevRequests =>
         prevRequests.map(request =>
           request.id === requestId
-            ? { ...request, status: 'rejected', respondedAt: new Date().toISOString() }
+            ? response.data
             : request
         )
       );
@@ -108,8 +108,8 @@ export default function ConnectionRequests() {
   const getStatusBadge = (status) => {
     const statusStyles = {
       pending: 'bg-yellow-100 text-yellow-800',
-      accepted: 'bg-green-100 text-green-800',
-      rejected: 'bg-red-100 text-red-800'
+      ACCEPTED: 'bg-green-100 text-green-800',
+      REJECTED: 'bg-red-100 text-red-800'
     };
 
     return (
@@ -173,7 +173,7 @@ export default function ConnectionRequests() {
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-700">
             <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-              Pending Requests ({requests.filter(r => r.status === 'pending').length})
+              Pending Requests ({requests.filter(r => r.status?.toLowerCase() === 'pending').length})
             </h3>
           </div>
 
@@ -199,7 +199,7 @@ export default function ConnectionRequests() {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
-                {requests.map((request) => (
+                {requests.filter(r => r.status?.toLowerCase() === 'pending').map((request) => (
                   <tr key={request.id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900 dark:text-white">
@@ -220,7 +220,7 @@ export default function ConnectionRequests() {
                       {getStatusBadge(request.status)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      {request.status === 'pending' ? (
+                      {request.status?.toLowerCase() === 'pending' ? (
                         <div className="flex space-x-2">
                           <button
                             onClick={() => handleAcceptRequest(request.id)}
@@ -230,14 +230,14 @@ export default function ConnectionRequests() {
                           </button>
                           <button
                             onClick={() => handleRejectRequest(request.id)}
-                            className="inline-flex items-center px-3 py-1 border border-gray-300 dark:border-slate-600 text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                           >
                             Reject
                           </button>
                         </div>
                       ) : (
                         <span className="text-gray-500 dark:text-gray-400">
-                          {request.status === 'accepted' ? 'Accepted' : 'Rejected'}
+                          {request.status === 'ACCEPTED' ? 'Accepted' : 'Rejected'}
                           {request.respondedAt && ` on ${formatDate(request.respondedAt)}`}
                         </span>
                       )}

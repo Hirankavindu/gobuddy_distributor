@@ -15,6 +15,8 @@ function AdminDashboard() {
   const [distributorsLoading, setDistributorsLoading] = useState(false);
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [selectedDistributor, setSelectedDistributor] = useState(null);
+  const [distributorCount, setDistributorCount] = useState(0);
+  const [countLoading, setCountLoading] = useState(false);
   
   // Function to fetch distributors
   const loadDistributors = useCallback(async () => {
@@ -56,6 +58,41 @@ function AdminDashboard() {
       setDistributorsLoading(false);
     }
   }, [navigate]);
+
+  // Function to fetch distributor count
+  const loadDistributorCount = useCallback(async () => {
+    console.log('Loading distributor count...');
+    const token = localStorage.getItem('accessToken');
+    
+    if (!token) {
+      console.error('No access token available for count');
+      return;
+    }
+    
+    setCountLoading(true);
+    try {
+      const response = await fetch('/api/v1/distributors/count', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Distributor count response:', data);
+      setDistributorCount(data.count || 0);
+    } catch (error) {
+      console.error('Error loading distributor count:', error);
+      setDistributorCount(0);
+    } finally {
+      setCountLoading(false);
+    }
+  }, []);
   
   // Check if user is logged in and has admin role
   useEffect(() => {
@@ -70,6 +107,11 @@ function AdminDashboard() {
       navigate('/');
     }
   }, [navigate]);
+  
+  // Load distributor count on component mount
+  useEffect(() => {
+    loadDistributorCount();
+  }, [loadDistributorCount]);
   
   // Load distributors when the view-distributors tab is active
   useEffect(() => {
@@ -756,6 +798,36 @@ function AdminDashboard() {
           {activeTab === 'dashboard' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Dashboard Cards */}
+          <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">Total Distributors</h3>
+              <div className="mt-4">
+                <div className="flex items-center">
+                  <div className="text-3xl font-bold text-gray-900 dark:text-white">
+                    {countLoading ? (
+                      <div className="animate-pulse">
+                        <div className="h-8 bg-gray-300 dark:bg-gray-600 rounded w-16"></div>
+                      </div>
+                    ) : (
+                      distributorCount
+                    )}
+                  </div>
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-300 mt-2">
+                  Registered distributors in the system
+                </p>
+              </div>
+              <div className="mt-5">
+                <button 
+                  onClick={() => setActiveTab('view-distributors')}
+                  className="text-sm font-medium text-blue-600 hover:text-blue-500"
+                >
+                  View all distributors →
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <h3 className="text-lg font-medium text-gray-900 dark:text-white">User Management</h3>

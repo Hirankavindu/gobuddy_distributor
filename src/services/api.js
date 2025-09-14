@@ -156,6 +156,7 @@ export const driversAPI = {
 export const ordersAPI = {
   getAll: (params) => api.get('/orders', { params }),
   getById: (id) => api.get(`/orders/${id}`),
+  getByDistributor: (distributorId) => api.get(`/orders/distributor/${distributorId}`),
   create: (orderData) => api.post('/orders', orderData),
   update: (id, orderData) => api.put(`/orders/${id}`, orderData),
   delete: (id) => api.delete(`/orders/${id}`),

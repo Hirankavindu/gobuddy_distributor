@@ -8,6 +8,7 @@ import DashboardHome from '../pages/dashboard/DashboardHome';
 import Distributors from '../pages/dashboard/Distributors';
 import Drivers from '../pages/dashboard/Drivers';
 import Products from '../pages/dashboard/Products';
+import Orders from '../pages/dashboard/Orders';
 import ConnectionRequests from '../pages/dashboard/ConnectionRequests';
 import SignIn from '../pages/signin';
 import PlaceholderPage from '../components/PlaceholderPage';
@@ -49,7 +50,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'orders',
-            element: <PlaceholderPage title="Orders" />,
+            element: <Orders />,
           },
           {
             path: 'settings',

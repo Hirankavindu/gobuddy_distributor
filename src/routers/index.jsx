@@ -8,6 +8,7 @@ import DashboardHome from '../pages/dashboard/DashboardHome';
 import Distributors from '../pages/dashboard/Distributors';
 import Drivers from '../pages/dashboard/Drivers';
 import Products from '../pages/dashboard/Products';
+import ConnectionRequests from '../pages/dashboard/ConnectionRequests';
 import SignIn from '../pages/signin';
 import PlaceholderPage from '../components/PlaceholderPage';
 import AdminDashboard from '../pages/admin/AdminDashboard';
@@ -41,6 +42,10 @@ const router = createBrowserRouter([
           {
             path: 'products',
             element: <Products />,
+          },
+          {
+            path: 'connection-requests',
+            element: <ConnectionRequests />,
           },
           {
             path: 'orders',

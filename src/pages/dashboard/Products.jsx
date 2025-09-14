@@ -1,9 +1,9 @@
 import { useState, useContext } from 'react';
-import axios from 'axios';
 import Swal from 'sweetalert2';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../services/firebase';
 import AuthContext from '../../providers/AuthContext';
+import { productsAPI } from '../../services/api';
 
 // Sample products data
 const productsData = [
@@ -172,12 +172,7 @@ export default function Products() {
         image: imageUrl,
         distributorId: user.userId
       };
-      await axios.post('/api/v1/products', formData, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      await productsAPI.create(formData);
       Swal.fire({
         icon: 'success',
         title: 'Success!',
